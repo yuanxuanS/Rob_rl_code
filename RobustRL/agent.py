@@ -22,13 +22,13 @@ class DQAgent:
             # args
             features_dim = self.node_features_dims
             hidden_dim = 4
-            dropout = 0.6
+
             alpha = 0.2  # leakyReLU的alpha
             nhead = 1
 
-            self.policy_model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1, dropout=dropout, alpha=alpha,
+            self.policy_model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1,  alpha=alpha,
                                     nheads=nhead, mergeZ=True, mergeState=True)
-            self.target_model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1, dropout=dropout, alpha=alpha,
+            self.target_model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1,  alpha=alpha,
                                     nheads=nhead, mergeZ=True, mergeState=True)
 
             with torch.no_grad():

@@ -19,7 +19,7 @@ class DQAgent:
             dropout = 0.6
             alpha = 0.2  # leakyReLU的alpha
             nhead = 1
-            self.model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1, dropout=dropout, alpha=alpha, nheads=nhead)
+            self.model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1, alpha=alpha, nheads=nhead)
 
     def reset(self):
         '''

@@ -253,12 +253,12 @@ class W2V_QN(torch.nn.Module):
 # w2v(x, adj, mu_init)
 
 class GAT(nn.Module):
-    def __init__(self, nfeat, nhid, nout, dropout, alpha, nheads, mergeZ, mergeState):
+    def __init__(self, nfeat, nhid, nout, alpha, nheads, mergeZ, mergeState):
         """Dense version of GAT."""
         super(GAT, self).__init__()
         self.nfeat = nfeat
         self.nhid = nhid
-        self.dropout = dropout
+
         self.nout = nout
         self.alpha = alpha
         self.mergeZ = mergeZ
@@ -267,7 +267,7 @@ class GAT(nn.Module):
         # nhid 就是输出的特征大小。 因为GAT的隐藏层hid会输出特征
         # print(f"nhid is {nhid}")
         # print(f"stack multi GAT layer")
-        self.attentions = [GraphAttentionLayer(self.nfeat, self.nhid, dropout=self.dropout, alpha=self.alpha, concat=True, mergeZ=self.mergeZ, node_dim=self.nfeat) for _ in range(nheads)]
+        self.attentions = [GraphAttentionLayer(self.nfeat, self.nhid, alpha=self.alpha, concat=True, mergeZ=self.mergeZ, node_dim=self.nfeat) for _ in range(nheads)]
 
         for i, attention in enumerate(self.attentions):
             # print(f"第{i}个layer, {str(attention)}")
@@ -276,7 +276,7 @@ class GAT(nn.Module):
         # 会把多头的结果拼接起来，所以是nhid * nheads， 输出n个类
         #################
         # print(f"add final attention layer")
-        self.out_att = GraphAttentionLayer(self.nhid * nheads, self.nout, dropout=self.dropout, alpha=self.alpha, concat=False, mergeZ=self.mergeZ, node_dim=self.nfeat)
+        self.out_att = GraphAttentionLayer(self.nhid * nheads, self.nout, alpha=self.alpha, concat=False, mergeZ=self.mergeZ, node_dim=self.nfeat)
 
         # seed set feature theta
         self.theta = nn.Parameter(torch.empty(1, self.nfeat))  # 大小和每个节点的feature向量一样
@@ -303,17 +303,12 @@ class GAT(nn.Module):
 
 
         ## x, features [n, feature_size]
-        x = F.dropout(x, self.dropout, training=self.training)
-        # print(f"{self.print_tag} x size  {x.size()[0]}")
-        # print(f"after dropout x is {x}")
+
+
         x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
-        # print(f"after concat multi attention: {x.size()}")      # nhid = 8, 拼起来是8 * 8=64
-        # print(f"after multi attention concat is {x}")
-        x = F.dropout(x, self.dropout, training=self.training)
 
         x = F.elu(self.out_att(x, adj, z))
-        # print(f"final x  {x}")
-        # result = F.log_softmax(x, dim=1)
+
 
         result = F.log_softmax(x, dim=0)    # 不是分类问题，应该是纵向softmax
         return result

@@ -7,9 +7,9 @@ class GraphAttentionLayer(nn.Module):
     """
     Simple GAT layer, similar to https://arxiv.org/abs/1710.10903
     """
-    def __init__(self, in_features, out_features, dropout, alpha, concat=True, mergeZ=True, node_dim=None):
+    def __init__(self, in_features, out_features, alpha, concat=True, mergeZ=True, node_dim=None):
         super(GraphAttentionLayer, self).__init__()
-        self.dropout = dropout
+
         self.in_features = in_features
         self.out_features = out_features
         self.alpha = alpha
@@ -46,7 +46,7 @@ class GraphAttentionLayer(nn.Module):
         attention = torch.where(adj > 0, e, zero_vec)       # 相邻则为e系数， 否则为负无穷 [N, N]
         attention = F.softmax(attention, dim=1)
         # print(f"{self.print_tag} -- foward --attention after softmax \n{attention}")
-        attention = F.dropout(attention, self.dropout, training=self.training)
+
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
         # print(f"{self.print_tag} -- foward --- final h_prime \n {h_prime}")
         if self.concat:

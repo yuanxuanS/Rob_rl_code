@@ -24,8 +24,8 @@ def _init_fn(worker_id):
     np.random.seed(int(seed))
 
 class GATValueNet(GAT):
-    def __init__(self, node_num, nfeat, nhid, dropout, alpha, nheads, mergeZ, observe_state):
-        super(GATValueNet, self).__init__(nfeat, nhid, 1, dropout, alpha, nheads, mergeZ, observe_state)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
+    def __init__(self, node_num, nfeat, nhid, alpha, nheads, mergeZ, observe_state):
+        super(GATValueNet, self).__init__(nfeat, nhid, 1, alpha, nheads, mergeZ, observe_state)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         # 映射为一个scalar
         self.map_W = torch.nn.Parameter(torch.empty(node_num, 1))
@@ -49,34 +49,25 @@ class GATValueNet(GAT):
             sdset_mask = sdset_mask * self.theta
             x = x + sdset_mask
 
-        x = F.dropout(x, self.dropout, training=self.training)
-        # print(f"{self.print_tag} x size  {x.size()[0]}")
-        # print(f"after dropout x is {x}")
-        x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
-        # print(f"after concat multi attention: {x.size()}")      # nhid = 8, 拼起来是8 * 8=64
-        # print(f"after multi attention concat is {x}")
-        x = F.dropout(x, self.dropout, training=self.training)
 
+        x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
         #
         x = F.elu(self.out_att(x, adj, z))
-        # print(f"{self.print_tag} final x  {x}")
-        # result = F.log_softmax(x, dim=1)
 
         result = F.log_softmax(x, dim=0)    # 不是分类问题，应该是纵向softmax
 
         # 映射为一个标量
-        # result = self.map_W(result.T)
         result = torch.mm(result.T, self.map_W)
         return result
 
 
 class GATPolicyNet(GAT):
-    def __init__(self, node_num, nfeat, nhid, nout, dropout, alpha, nheads, mergeZ, observe_state):
-        super(GATPolicyNet, self).__init__(nfeat, nhid, nout, dropout, alpha,
+    def __init__(self, node_num, nfeat, nhid, nout, alpha, nheads, mergeZ, observe_state):
+        super(GATPolicyNet, self).__init__(nfeat, nhid, nout, alpha,
                                           nheads, mergeZ, observe_state)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         self.out_att_mu = self.out_att
-        self.out_att_std = GraphAttentionLayer(self.nhid * nheads, self.nout, dropout=self.dropout, alpha=self.alpha, concat=False, mergeZ=False)   # 只有layer的out_feat = 节点特征维度才能融合（z size才和a相同），所以mergeZ=False
+        self.out_att_std = GraphAttentionLayer(self.nhid * nheads, self.nout, alpha=self.alpha, concat=False, mergeZ=False)   # 只有layer的out_feat = 节点特征维度才能融合（z size才和a相同），所以mergeZ=False
 
         # 映射为想要的维度， 输入 (n* 2*node_feat_dim).T
         self.mu_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W
@@ -118,21 +109,17 @@ class GATPolicyNet(GAT):
             writeTxT(filename1, x)
 
         ## x, features [n, feature_size]
-        x = F.dropout(x, self.dropout, training=self.training)
 
         if sv_x:
             writeTxT(filename1, "[3] after dropout")
             writeTxT(filename1, x)
-        # print(f"{self.print_tag} x size  {x.size()[0]}")
-        # print(f"{self.print_tag} Policy net -- forward --  after dropout x is {x}")
+
         x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
 
         if sv_x:
             writeTxT(filename1, "[4] after cat")
             writeTxT(filename1, x)
-        # print(f"after concat multi attention: {x.size()}")      # nhid = 8, 拼起来是8 * 8=64
-        # print(f"{self.print_tag} Policy net -- forward -- after multi attention concat is {x}")
-        x = F.dropout(x, self.dropout, training=self.training)
+
 
         if sv_x:
             writeTxT(filename1, "[5] after dropout2")
@@ -190,11 +177,11 @@ class PPOContinuousAgent:
         self.model_name = model_name
         if self.model_name == 'GAT_PPO':
             nhid = self.node_features_dims
-            dropout = 0.6
+
             alpha = 0.2  # leakyReLU的alpha
             nhead = 1
-            self.actor = GATPolicyNet(self.graph.node, self.node_features_dims, nhid, 2*self.node_features_dims, dropout, alpha, nhead, mergeZ=True, observe_state=self.observe_state)  # 从n个中随意选一个分布
-            self.critic = GATValueNet(self.graph.node, self.node_features_dims, nhid,  dropout, alpha, nhead, mergeZ=True, observe_state=self.observe_state)
+            self.actor = GATPolicyNet(self.graph.node, self.node_features_dims, nhid, 2*self.node_features_dims, alpha, nhead, mergeZ=True, observe_state=self.observe_state)  # 从n个中随意选一个分布
+            self.critic = GATValueNet(self.graph.node, self.node_features_dims, nhid, alpha, nhead, mergeZ=True, observe_state=self.observe_state)
 
         # buffer
         self.memory = {}
@@ -329,7 +316,6 @@ env = Environment(T, sub_T, budget, graph, dimensions)
 env.reset()
 # -- test --
 nhid = dimensions       # 中间layer的输出大小必须和节点特征维度相同才能融合z
-dropout = 0.6
 alpha = 0.2  # leakyReLU的alpha
 nhead = 1
 mergeZ = True
@@ -345,7 +331,7 @@ def writeTxT(file, data):
 
 
 # -- policy --
-net= GATPolicyNet(env.N, env.node_feat_dimension, nhid, 2*env.node_feat_dimension, 0.6, 0.2, nhead, mergeZ, obs_state)
+net= GATPolicyNet(env.N, env.node_feat_dimension, nhid, 2*env.node_feat_dimension, 0.2, nhead, mergeZ, obs_state)
 mu, std = net(env.node_features, env.adj_matrix, None, env.z)
 print(mu, std)
 #
