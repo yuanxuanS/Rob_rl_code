@@ -71,7 +71,7 @@ class GATPolicyNet(GAT):
 
         # 映射为想要的维度， 输入 (n* 2*node_feat_dim).T
         self.mu_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W
-        torch.nn.init.xavier_normal(self.mu_W.data, gain=1.414)
+        torch.nn.init.xavier_normal_(self.mu_W.data, gain=1.414)
         self.std_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W
         torch.nn.init.xavier_uniform_(self.std_W.data, gain=1.414)
 
@@ -152,6 +152,8 @@ class GATPolicyNet(GAT):
             writeTxT(filename1, "[9] get x_std")
             writeTxT(filename1, x)
         # print(f"{self.print_tag} after tanh mu {x_mu} softplus std {x_std}")
+        x_std = torch.sigmoid(x_std)
+        print(f"{self.print_tag} --act sigma after sigmoid {x_std}")
         return x_mu.T, x_std.T          # [2*node_feat_dim, 1]
 
         # mu = self.out_att_mu(x, adj, z)
@@ -202,6 +204,7 @@ class PPOContinuousAgent:
     def act(self, observation=None):
 
         mu, sigma = self.actor(self.node_features, self.graph.adj_matrix, observation, z=self.z)
+
         action_dist = torch.distributions.Normal(mu, sigma)     # object, mu sigma维度必须相同，是该位置上的分布参数
         action_nosoftmax = action_dist.sample()  # 每个值从分布中采样
         action = F.softmax(action_nosoftmax, dim=1)      # 归一化到0-1, # tensor, 二维
