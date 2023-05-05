@@ -10,7 +10,7 @@ class DQAgent:
                  init_epsilon, train_batch, update_target_steps):
 
         self.env = env
-        self.graph = self.env.graph  # a graph, Graph_IM instance
+        self.graph = self.env.G  # a graph, Graph_IM instance
         self.z = self.env.z
         self.model_name = model_name
         self.node_features_dims = self.env.node_feat_dimension
@@ -38,7 +38,7 @@ class DQAgent:
 
         # train args
         self.train_batch_size = train_batch     # 训练网络需要的样本数量
-        self.episode_steps = self.env.sub_T
+        self.episode_steps = self.env.budget
         self.gamma = 0.99
         self.criterion = torch.nn.MSELoss(reduction='mean')
         self.copy_model_steps = update_target_steps
@@ -86,7 +86,7 @@ class DQAgent:
     def get_sample(self):
         if len(self.memory) > self.train_batch_size:
             batch = random.sample(self.memory, self.train_batch_size)
-            print(f"{self.print_tag} batch type is {type(batch)} and batch is {batch}")
+            print(f"{self.print_tag} batch is {batch}")
             # print(f" zip is {list(zip(*batch))}")
             state_batch = list(list(zip(*batch))[0])
             print(f"state batch is {state_batch}")

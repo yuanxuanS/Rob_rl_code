@@ -4,7 +4,7 @@ import torch
 from IC import runIC_repeat
 class Environment(object):
 
-    def __init__(self, T, sub_T, budget, graph, node_feat_dim):
+    def __init__(self, T, budget, graph, node_feat_dim):
         ## 网络
         self.G = graph  # a Graph class
         self.g = self.G.graph   # a graph
@@ -32,7 +32,6 @@ class Environment(object):
 
         ## 网络上的迭代
         self.T = T
-        self.sub_T = sub_T
         self.budget = budget
         self.state = None
 
@@ -40,8 +39,7 @@ class Environment(object):
         ##  test
         self.print_tag = "ENV---"
 
-
-    def reset(self):
+    def init(self):
         # 生成节点特征
         self.node_features = self.generate_node_feature()
         # 初始化超参z
@@ -49,6 +47,9 @@ class Environment(object):
         # 通过超参z初始化传播概率矩阵
         self.propagate_p_matrix = self.hyper_model()
         # 初始化状态
+        self.init_state()
+
+    def reset(self):
         self.init_state()
 
     def init_state(self):

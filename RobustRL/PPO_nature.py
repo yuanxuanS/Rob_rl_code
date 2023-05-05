@@ -75,7 +75,7 @@ class GATPolicyNet(GAT):
         self.std_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W
         torch.nn.init.xavier_uniform_(self.std_W.data, gain=1.414)
 
-        self.print_tag = "Models --- PPO PolicyNet"
+        self.print_tag = " PPO PolicyNet ---"
 
     def forward(self, x_feat, adj, observation=None, z=None, sv_x=False):
         x = copy.deepcopy(x_feat)
@@ -153,7 +153,7 @@ class GATPolicyNet(GAT):
             writeTxT(filename1, x)
         # print(f"{self.print_tag} after tanh mu {x_mu} softplus std {x_std}")
 
-        print(f"{self.print_tag} --act sigma after sigmoid {x_std}")
+        # print(f"{self.print_tag} -- sigma \n\t\t\t{x_std}")
         return x_mu.T, x_std.T          # [2*node_feat_dim, 1]
 
         # mu = self.out_att_mu(x, adj, z)
@@ -165,7 +165,7 @@ class GATPolicyNet(GAT):
 
 
 class PPOContinuousAgent:
-    def __init__(self, env, lr, model_name, norm_name, policy_dis, observe_state,
+    def __init__(self, env, lr, model_name, policy_dis, norm_name, observe_state,
                  gamma, lmbda, eps, epochs):
         self.print_tag = "PPO Agent---"
         self.env = env
@@ -219,7 +219,7 @@ class PPOContinuousAgent:
             action = action_nosoftmax
         else:
             print(f"{self.print_tag} wrong dis str")
-        print(f"{self.print_tag} -- act before {action_nosoftmax}\n after norm {action}")
+        print(f"{self.print_tag} -- action before \n\t\t{action_nosoftmax}\n after norm {action}")
         return [action_nosoftmax, action]
 
     def norm(self, data):
@@ -235,7 +235,7 @@ class PPOContinuousAgent:
         self.memory['rewards'].append(reward)
 
     def update(self):
-        print(f"{self.print_tag} memory is {self.memory}")
+        # print(f"{self.print_tag} memory is {self.memory}")
         states = self.memory['states'][0]
         if not isinstance(states, torch.Tensor):
             states = torch.from_numpy(states)
@@ -277,7 +277,7 @@ class PPOContinuousAgent:
         for e in range(self.epochs):
             print(f"{self.print_tag} updating --- epoch {e}")
             mu, std = self.actor(self.node_features, self.graph.adj_matrix, states, z=self.z)
-            print(f"{self.print_tag} updating-- mu {mu} std {std}")
+            # print(f"{self.print_tag} updating-- mu {mu} std {std}")
             if self.policy_dis == "Gauss":
                 std = torch.sigmoid(std)
                 action_dists = torch.distributions.Normal(mu, std)
@@ -301,62 +301,54 @@ class PPOContinuousAgent:
             surr1_ratio = ratio
             surr2_ratio = torch.clamp(ratio, 1 - self.eps, 1 + self.eps)
             torch.autograd.set_detect_anomaly(True)
-            with torch.autograd.detect_anomaly():
-                actor_loss = torch.mean(-torch.min(surr1_ratio, surr2_ratio)) * advantage
-                critic_loss = torch.mean(F.mse_loss(self.critic(self.node_features, self.graph.adj_matrix, states, z=self.z), td_target.detach()))
-                print(f"{self.print_tag} updating --- in epoch {e} actor loss {actor_loss} critic loss {critic_loss}")
+            # with torch.autograd.detect_anomaly():
+            actor_loss = torch.mean(-torch.min(surr1_ratio, surr2_ratio)) * advantage
+            critic_loss = torch.mean(F.mse_loss(self.critic(self.node_features, self.graph.adj_matrix, states, z=self.z), td_target.detach()))
+            print(f"{self.print_tag} updating --- in epoch {e} actor loss {actor_loss} critic loss {critic_loss}")
 
-                self.actor_optimizer.zero_grad()
-                self.critic_optimizer.zero_grad()
+            self.actor_optimizer.zero_grad()
+            self.critic_optimizer.zero_grad()
 
-                # for name, parms in self.actor.named_parameters():
-                #     print('-->name:', name)
-                #     print('-->para:', parms)
-                #     print('-->grad_requirs:', parms.requires_grad)
-                #     print('-->grad_value:', parms.grad)
-                #     print("===")
+            # for name, parms in self.actor.named_parameters():
+            #     print('-->name:', name)
+            #     print('-->para:', parms)
+            #     print('-->grad_requirs:', parms.requires_grad)
+            #     print('-->grad_value:', parms.grad)
+            #     print("===")
 
-                actor_loss.backward()
-                # for name, parms in self.actor.named_parameters():
-                #     if parms.grad is not None and torch.isnan(parms.grad).any():
-                #         print(f"nan found")
-                #         print('-->name:', name)
-                #         print('-->grad_value:', parms.grad)
-                #         print("===")
-                #         raise SystemExit
-                critic_loss.backward()
-                self.actor_optimizer.step()
-                print(f"{self.print_tag} updating --- after loss step W {self.actor.attentions[0].W}")
-                # for name, parms in self.actor.named_parameters():
-                #     print('-->name:', name)
-                #     print('-->para:', parms)
-                #     print('-->grad_requirs:', parms.requires_grad)
-                #     print('-->grad_value:', parms.grad)
-                #     print("===")
+            actor_loss.backward()
+            # for name, parms in self.actor.named_parameters():
+            #     if parms.grad is not None and torch.isnan(parms.grad).any():
+            #         print(f"nan found")
+            #         print('-->name:', name)
+            #         print('-->grad_value:', parms.grad)
+            #         print("===")
+            #         raise SystemExit
+            critic_loss.backward()
+            self.actor_optimizer.step()
 
-
-                self.critic_optimizer.step()
+            self.critic_optimizer.step()
 
         return actor_loss, critic_loss
 
 
 # env
-T = 1
-sub_T = 4
-budget = 4  #
-graph = Graph_IM(nodes=10, edges_p=0.5)
-dimensions = 3
-env = Environment(T, sub_T, budget, graph, dimensions)
-env.reset()
-# -- test --
-nhid = dimensions       # 中间layer的输出大小必须和节点特征维度相同才能融合z
-alpha = 0.2  # leakyReLU的alpha
-nhead = 1
-mergeZ = True
-obs_state = False
-
-# write to txt
-filename1 = '.\\test.txt'
+# T = 1
+# sub_T = 4
+# budget = 4  #
+# graph = Graph_IM(nodes=10, edges_p=0.5)
+# dimensions = 3
+# env = Environment(T, budget, graph, dimensions)
+# env.reset()
+# # -- test --
+# nhid = dimensions       # 中间layer的输出大小必须和节点特征维度相同才能融合z
+# alpha = 0.2  # leakyReLU的alpha
+# nhead = 1
+# mergeZ = True
+# obs_state = False
+#
+# # write to txt
+# filename1 = '.\\test.txt'
 
 def writeTxT(file, data):
     f = open(file, 'a')
@@ -388,31 +380,31 @@ def writeTxT(file, data):
 # print(value)
 
 # PPO
-actor_lr = 1e-3
-critic_lr = 1e-3
-lr = [actor_lr, critic_lr]
-
-norm = "sigmoid"
-dis = "Gauss"       #"Beta"
-observe_state = False
-gamma = 0.98
-lmbda = 0.95
-epochs = 50
-eps = 0.2
-agent = PPOContinuousAgent(env, lr, 'GAT_PPO', norm, dis, observe_state, gamma, lmbda, eps, epochs)
-agent.reset()
+# actor_lr = 1e-3
+# critic_lr = 1e-3
+# lr = [actor_lr, critic_lr]
+#
+# norm = "sigmoid"
+# dis = "Gauss"       #"Beta"
+# observe_state = False
+# gamma = 0.98
+# lmbda = 0.95
+# epochs = 50
+# eps = 0.2
+# agent = PPOContinuousAgent(env, lr, 'GAT_PPO', dis, norm, observe_state, gamma, lmbda, eps, epochs)
+# agent.reset()
 
 # print(f"model structure  {agent.actor}")
 # - act -
 # action = net.act(None)
 # print(action)
-# - update -
-nature_state, _ = env.get_seed_state()
-print(f"before {env.z}")
-z_action_pair_lst = agent.act(nature_state)
-# print(f"get action from agent {z_action}")
-z_new = env.step_hyper(z_action_pair_lst)
-# print(f"after {env.z}")
-agent.remember(nature_state, z_action_pair_lst, 1.)
-actor_loss, critic_loss = agent.update()
-print(f"actor loss {actor_loss} critic loss {critic_loss}")
+# # - update -
+# nature_state, _ = env.get_seed_state()
+# print(f"before {env.z}")
+# z_action_pair_lst = agent.act(nature_state)
+# # print(f"get action from agent {z_action}")
+# z_new = env.step_hyper(z_action_pair_lst)
+# # print(f"after {env.z}")
+# agent.remember(nature_state, z_action_pair_lst, 1.)
+# actor_loss, critic_loss = agent.update()
+# print(f"actor loss {actor_loss} critic loss {critic_loss}")

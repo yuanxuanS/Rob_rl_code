@@ -1,3 +1,5 @@
+import os
+
 import networkx as nx
 import numpy as np
 import matplotlib.pyplot as plt
@@ -7,63 +9,61 @@ from generate_node_feature import generate_node_feature, generate_edge_features
 from hyperparam_model import hyper_model
 from agent import DQAgent
 from PPO_nature import PPOContinuousAgent
+import sys
 
+sys.stdout = open(os.devnull, 'w')
 epoches = 100
 
 T = 1
-sub_T = 5
 budget = 4  #
 propagate_p = 0.7
-q = 1     # willingness probability
 cascade = None
 
-dimensions = 3
+node_dim = 3
 
-
-# for t in range(T):
-#     ## Environment definition ##
 epsilon = 0.3
-
-# nature_agent = DQAgent(graph, "")
 batch_size = 2
 update_target_steps = 2       # copy policy_model -> target model
-main_lr = 1e-2
+main_lr = 1e-3
 
 # nature
-actor_lr = 1e-8
-critic_lr = 1e-2
+actor_lr = 1e-5
+critic_lr = 1e-3
 nature_lr = [actor_lr, critic_lr]
+PolicyDisName = "Beta"
+PolicyNormName = "sigmoid"
 gamma = 0.98
 lmbda = 0.95
-epochs = 10
+epochs = 100
 eps = 0.2
 # plot
-x_iter_t = []
+
 
 y_cumulative_reward = []
+nature_critic_loss = []
+nature_actor_loss = []
 
-# buffer_nature = []
-# --------------- test agent, when training
-for episode in range(1):
-    # 初始化一个图结构:节点，连接关系, 节点特征。但传播参数不确定
-    graph = Graph_IM(nodes=10, edges_p=0.5)
-    # 环境初始化：graph, node features, state S, z
-    env = Environment(T, sub_T, budget, graph, dimensions)      # T=1, one-step, adversary=bandit
+# one graph with multi episodes
+graph = Graph_IM(nodes=10, edges_p=0.5)
+env = Environment(T, budget, graph, node_dim)      # T=1, one-step, adversary is a bandit
+env.init()
+
+canObserveState = False
+nature_agent = PPOContinuousAgent(env, nature_lr, 'GAT_PPO', PolicyDisName, PolicyNormName, canObserveState, gamma,
+                                  lmbda, eps, epochs)
+
+main_agent = DQAgent(env, main_lr, 'GAT_QN', epsilon, batch_size, update_target_steps)
+
+episodes = 10
+for episode in range(episodes):
     env.reset()
-
-    # 初始化nature agent
-    nature_observe_state = False
-    nature_agent = PPOContinuousAgent(env, nature_lr, 'GAT_PPO', nature_observe_state, gamma, lmbda, eps, epochs)
     nature_agent.reset()
 
-
-    # nature agent
     nature_state, _ = env.get_seed_state()
     z_action_pair_lst = nature_agent.act(nature_state)
     z_new = env.step_hyper(z_action_pair_lst)
 
     # main agent
-    main_agent = DQAgent(env, main_lr, 'GAT_QN', epsilon, batch_size, env.sub_T, update_target_steps)
     main_agent.reset()
     cumul_reward = 0.
 
@@ -73,7 +73,7 @@ for episode in range(1):
         print(f"---------- sub step {i}")
         state, feasible_action = env.get_seed_state()     # [1, N]
         action = main_agent.act(state, feasible_action)
-        print(f"action is {action} and its type is {type(action)}")
+        print(f"action is {action} ")
         next_state, reward = env.step_seed(action)
 
         # add to buffer
@@ -88,6 +88,7 @@ for episode in range(1):
         sub_loss.append(loss)
         print(f"loss is {loss}")
 
+    y_cumulative_reward.append(cumul_reward)
     print(f"cumulative reward is {cumul_reward}")
         # plot
         # plt.plot(range(env.budget), sub_reward)
@@ -100,3 +101,22 @@ for episode in range(1):
     # get a trajectory and update the nature model
     act_loss_nature, cri_loss_nature = nature_agent.update()
     print(f"actor loss {act_loss_nature} critic loss {cri_loss_nature}")
+    nature_critic_loss.append(cri_loss_nature.item())
+    nature_actor_loss.append(act_loss_nature.item())
+
+plt.figure()
+plt.plot(range(episodes), y_cumulative_reward)
+plt.title("reward every episode")
+plt.savefig("reward")
+
+plt.figure()
+plt.plot(range(episodes), nature_actor_loss)
+plt.title("actor loss of nature agent every episode")
+plt.savefig("act_loss")
+
+plt.figure()
+plt.plot(range(episodes), nature_critic_loss)
+plt.title("critic loss of nature agent every episode")
+plt.savefig("cri_loss")
+
+plt.show()
