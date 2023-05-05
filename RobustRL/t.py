@@ -1,8 +1,39 @@
+import random
+
 import torch
 import numpy as np
 import copy
+from scipy.stats import beta
+import matplotlib.pyplot as plt
 
-print(torch.exp(torch.tensor(100)))
+
+# ---beta distri
+# a_lst = [1.1, 2, 3, 4, 5]  # 贝塔分布的alpha值
+# b_lst = [1.1, 2, 3, 4, 5]  # 贝塔分布的beta值
+# x = np.arange(0.01, 1, 0.01)  # 给定的输入数据
+# round = 2
+# i = round * len(a_lst)
+# for a in a_lst:
+#     i += 1
+#     plt.figure()
+#     for b in a_lst:
+#         y = beta.pdf(x, a, b)
+#         plt.plot(x, y, label=f'a={a} b={b}')
+#         plt.legend()
+#     plt.savefig("./beta/"+str(i)+".jpg")
+# plt.show()
+
+alpha_lst = np.arange(0.01, 5, 0.1)
+beta_lst = np.arange(0.01, 5, 0.1)
+
+for alpha in alpha_lst:
+    for beta in beta_lst:
+        m = torch.distributions.beta.Beta(alpha, beta)
+        lst = []
+        for i in range(3000):
+            lst.append(m.sample())
+        print(max(lst), min(lst))
+# print(torch.exp(torch.tensor(100)))
 # print(torch.rand(1))
 # a = torch.Tensor([2, 3])
 #

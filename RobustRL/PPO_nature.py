@@ -152,7 +152,7 @@ class GATPolicyNet(GAT):
             writeTxT(filename1, "[9] get x_std")
             writeTxT(filename1, x)
         # print(f"{self.print_tag} after tanh mu {x_mu} softplus std {x_std}")
-        x_std = torch.sigmoid(x_std)
+
         print(f"{self.print_tag} --act sigma after sigmoid {x_std}")
         return x_mu.T, x_std.T          # [2*node_feat_dim, 1]
 
@@ -165,7 +165,7 @@ class GATPolicyNet(GAT):
 
 
 class PPOContinuousAgent:
-    def __init__(self, env, lr, model_name, observe_state,
+    def __init__(self, env, lr, model_name, norm_name, policy_dis, observe_state,
                  gamma, lmbda, eps, epochs):
         self.print_tag = "PPO Agent---"
         self.env = env
@@ -176,6 +176,8 @@ class PPOContinuousAgent:
         self.z = self.env.z
         self.observe_state = observe_state
 
+        self.policy_dis = policy_dis        # “Beta” or "Gauss"
+        self.norm_name = norm_name      # norm method when Gaussian distribution, "sigmoid" or "softmax"
         self.model_name = model_name
         if self.model_name == 'GAT_PPO':
             nhid = self.node_features_dims
@@ -204,12 +206,28 @@ class PPOContinuousAgent:
     def act(self, observation=None):
 
         mu, sigma = self.actor(self.node_features, self.graph.adj_matrix, observation, z=self.z)
-
-        action_dist = torch.distributions.Normal(mu, sigma)     # object, mu sigma维度必须相同，是该位置上的分布参数
-        action_nosoftmax = action_dist.sample()  # 每个值从分布中采样
-        action = F.softmax(action_nosoftmax, dim=1)      # 归一化到0-1, # tensor, 二维
+        if self.policy_dis == "Gauss":
+            sigma = torch.sigmoid(sigma)        # Gauss std bounds to 1
+            action_dist = torch.distributions.Normal(mu, sigma)     # object, mu sigma维度必须相同，是该位置上的分布参数
+            action_nosoftmax = action_dist.sample()  # 每个值从分布中采样
+            action = self.norm(action_nosoftmax)        # norm to 0-1
+        elif self.policy_dis == "Beta":
+            alpha = F.softplus(mu) + 1.
+            beta = F.softplus(sigma) + 1.       # alpha and beta need to be larger than 1
+            action_dist = torch.distributions.beta.Beta(alpha, beta)      # alpha, beta
+            action_nosoftmax = action_dist.sample()
+            action = action_nosoftmax
+        else:
+            print(f"{self.print_tag} wrong dis str")
+        print(f"{self.print_tag} -- act before {action_nosoftmax}\n after norm {action}")
         return [action_nosoftmax, action]
 
+    def norm(self, data):
+        if self.norm_name == "softmax":
+            withNorm = F.softmax(data, dim=1)      # 归一化到0-1, # tensor, 二维
+        elif self.norm_name == "sigmoid":
+            withNorm = torch.sigmoid(data)
+        return withNorm
     def remember(self, state, action_pair, reward):
 
         self.memory['states'].append(state)
@@ -246,20 +264,33 @@ class PPOContinuousAgent:
         advantage = utils.compute_advantage(self.gamma, self.lmbda, td_delta)       # one-step，相当于就是td_delta
         # print(f"{self.print_tag} advantage is {advantage}")
         mu, std = self.actor(self.node_features, self.graph.adj_matrix, states, z=self.z)
-        action_dists = torch.distributions.Normal(mu.detach(), std.detach())        # 这里计算出mu std，后面更新用到这个结果，比如更新网络，不再因为mu std更新的网络的参数
-        old_log_probs = action_dists.log_prob(actions_nosoftmax)      # 该action值在分布中对应的概率的log值，还原概率加上.exp()
+        if self.policy_dis == "Gauss":
+            std = torch.sigmoid(std)
+            action_dists = torch.distributions.Normal(mu.detach(), std.detach())        # 这里计算出mu std，后面更新用到这个结果，比如更新网络，不再因为mu std更新的网络的参数
+            old_log_probs = action_dists.log_prob(actions_nosoftmax)      # 该action值在分布中对应的概率的log值，还原概率加上.exp()
+        elif self.policy_dis == "Beta":
+            alpha = F.softplus(mu) + 1.
+            beta = F.softplus(std) + 1.  # alpha and beta need to be larger than 1
+            action_dists = torch.distributions.beta.Beta(alpha.detach(), beta.detach())
+            old_log_probs = action_dists.log_prob(actions_nosoftmax)
 
         for e in range(self.epochs):
             print(f"{self.print_tag} updating --- epoch {e}")
             mu, std = self.actor(self.node_features, self.graph.adj_matrix, states, z=self.z)
             print(f"{self.print_tag} updating-- mu {mu} std {std}")
-            action_dists = torch.distributions.Normal(mu, std)
-            # tmp_distri_action = action_dists.log_prob(actions_nosoftmax).exp()
-            # print(f"{self.print_tag} updating-- action 在新分布中采样 {tmp_distri_action} ")
-            log_probs = action_dists.log_prob(actions_nosoftmax)
-            print(f"{self.print_tag} updating -- 仅log {log_probs} old log {old_log_probs}")
+            if self.policy_dis == "Gauss":
+                std = torch.sigmoid(std)
+                action_dists = torch.distributions.Normal(mu, std)
+                log_probs = action_dists.log_prob(actions_nosoftmax)
+            elif self.policy_dis == "Beta":
+                alpha = F.softplus(mu) + 1.
+                beta = F.softplus(std) + 1.  # alpha and beta need to be larger than 1
+                action_dists = torch.distributions.beta.Beta(alpha, beta)
+                log_probs = action_dists.log_prob(actions_nosoftmax)
+            else:
+                print(f"{self.print_tag} wrong dis str")
             ratio = torch.exp(log_probs - old_log_probs)
-            print(f"{self.print_tag} updating -- exp-ratio {ratio}")
+            # print(f"{self.print_tag} updating -- exp-ratio {ratio}")
             # print(f"{self.print_tag} ratio is {ratio}")
 
             # surr1 = ratio * advantage
@@ -333,23 +364,23 @@ def writeTxT(file, data):
     f.close()
 
 
-# -- policy --
-net= GATPolicyNet(env.N, env.node_feat_dimension, nhid, 2*env.node_feat_dimension, 0.2, nhead, mergeZ, obs_state)
-mu, std = net(env.node_features, env.adj_matrix, None, env.z)
-print(mu, std)
+# -- policy test and debug --
+# net= GATPolicyNet(env.N, env.node_feat_dimension, nhid, 2*env.node_feat_dimension, 0.2, nhead, mergeZ, obs_state)
+# mu, std = net(env.node_features, env.adj_matrix, None, env.z)
+# print(mu, std)
+# #
+# mu1, std1 = net(env.node_features, env.adj_matrix, None, env.z)
+# print(mu1, std1)
 #
-mu1, std1 = net(env.node_features, env.adj_matrix, None, env.z)
-print(mu1, std1)
-
-
-action_dist = torch.distributions.Normal(mu, std)     # ??
-print(action_dist)
-action = action_dist.sample()  # ??
-print(f" before {action}")
-action = F.softmax(action, dim=1)
-print(f" after {action}")
-old_log_probs = action_dist.log_prob(action)
-print(old_log_probs)
+#
+# action_dist = torch.distributions.Normal(mu, std)     # ??
+# print(action_dist)
+# action = action_dist.sample()  # ??
+# print(f" before {action}")
+# action = F.softmax(action, dim=1)
+# print(f" after {action}")
+# old_log_probs = action_dist.log_prob(action)
+# print(old_log_probs)
 
 # value net
 # vnet = GATValueNet(env.N, env.node_feat_dimension, nhid, 0.6, 0.2, nhead, mergeZ, obs_state)
@@ -357,29 +388,31 @@ print(old_log_probs)
 # print(value)
 
 # PPO
-actor_lr = 1e-5
-critic_lr = 1e-5
+actor_lr = 1e-3
+critic_lr = 1e-3
 lr = [actor_lr, critic_lr]
 
+norm = "sigmoid"
+dis = "Gauss"       #"Beta"
 observe_state = False
 gamma = 0.98
 lmbda = 0.95
-epochs = 500
+epochs = 50
 eps = 0.2
-# agent = PPOContinuousAgent(env, lr, 'GAT_PPO', observe_state, gamma, lmbda, eps, epochs)
-# agent.reset()
+agent = PPOContinuousAgent(env, lr, 'GAT_PPO', norm, dis, observe_state, gamma, lmbda, eps, epochs)
+agent.reset()
 
 # print(f"model structure  {agent.actor}")
 # - act -
 # action = net.act(None)
 # print(action)
 # - update -
-# nature_state, _ = env.get_seed_state()
-# print(f"before {env.z}")
-# z_action_pair_lst = agent.act(nature_state)
+nature_state, _ = env.get_seed_state()
+print(f"before {env.z}")
+z_action_pair_lst = agent.act(nature_state)
 # print(f"get action from agent {z_action}")
-# z_new = env.step_hyper(z_action_pair_lst)
+z_new = env.step_hyper(z_action_pair_lst)
 # print(f"after {env.z}")
-# agent.remember(nature_state, z_action_pair_lst, 1.)
-# actor_loss, critic_loss = agent.update()
-# print(f"actor loss {actor_loss} critic loss {critic_loss}")
+agent.remember(nature_state, z_action_pair_lst, 1.)
+actor_loss, critic_loss = agent.update()
+print(f"actor loss {actor_loss} critic loss {critic_loss}")
