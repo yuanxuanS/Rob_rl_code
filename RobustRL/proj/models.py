@@ -6,8 +6,7 @@ import networkx as nx
 import random
 import numpy as np
 from layers import GraphAttentionLayer
-from generate_node_feature import generate_node_feature
-from graph import Graph_IM
+
 
 class S2V_QN(torch.nn.Module):
     def __init__(self, reg_hidden, embed_dim, len_pre_pooling, len_post_pooling, T):

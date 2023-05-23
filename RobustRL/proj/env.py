@@ -4,53 +4,59 @@ import torch
 from IC import runIC_repeat
 class Environment(object):
 
-    def __init__(self, T, budget, graph, node_feat_dim):
-        ## 网络
-        self.G = graph  # a Graph class
-        self.g = self.G.graph   # a graph
-        # print(self.G.node)
-        self.N = self.G.node    # 节点个数， int
-
-        self.adj_matrix = self.G.adj_matrix      # 邻接矩阵，n,n
+    def __init__(self, graph_pool, node_feat_pool, z_pool, T, budget):
+        ## 图
+        self.graphs = graph_pool
+        self.node_features_pool = node_feat_pool
+        self.z_pool = z_pool
         # print(self.A)
+        self.G = None
         self.node_features = None
         self.z = None
-
-        ## 自定义参数
-        # 节点特征维度
-        self.node_feat_dimension = node_feat_dim
-
+        self.propagate_p_matrix = None
         ## 超参模型
 
         self.edge_features = []     # 通过 generate_edge_feature 拼接生成
 
-
-        ## 网络上的传播
-
-        self.propagate_p_matrix = np.zeros([self.N, self.N])        # 边上的传播概率
-        # print(f"p matrix dim is {self.propagate_p_matrix.ndim}")
-
         ## 网络上的迭代
-        self.T = T
+        self.T = T      # round nbr
         self.budget = budget
         self.state = None
+        self.done = False
 
         # print(f"state dim is {self.state.ndim}")
         ##  test
         self.print_tag = "ENV---"
+    def init_graph(self, g_id):
 
-    def init(self):
-        # 生成节点特征
-        self.node_features = self.generate_node_feature()
-        # 初始化超参z
-        self.z = self.init_hyper_z()
+        self.G = self.graphs[g_id]  # a Graph class
+        self.g = self.G.graph  # a graph
+        self.N = self.G.node  # 节点个数， int
+
+        self.adj_matrix = self.G.adj_matrix  # 邻接矩阵，n,n
+
+        ## 图上的传播
+        self.propagate_p_matrix = np.zeros([self.N, self.N])  # 边上的传播概率
+
+    def init_n_feat(self, ft_id):
+        '''
+        初始化节点特征、环境超参z、图的传播概率、node state
+        :return:
+        '''
+        self.node_features = self.node_features_pool[ft_id]
+        self.node_feat_dimension = len(self.node_features[0])  # 节点特征维度
+
+
+    def init_hyper(self, hyper_id):
+        self.z = self.z_pool[hyper_id]
         # 通过超参z初始化传播概率矩阵
         self.propagate_p_matrix = self.hyper_model()
-        # 初始化状态
-        self.init_state()
+
 
     def reset(self):
+        # episode状态记录相关的
         self.init_state()
+        self.done = False
 
     def init_state(self):
         self.state = np.zeros((1, self.N), dtype=int)  # 二维（1，N）0/1向量，节点加入set对应下标，=1
@@ -71,7 +77,7 @@ class Environment(object):
         self.state[0, action_node] = 1
         return self.state
 
-    def step_seed(self, main_action):
+    def step_seed(self, i, main_action):
         '''
         计算reward并且进行state update, reward-marginal contribution
         :param action: node下标
@@ -96,7 +102,9 @@ class Environment(object):
         # main agent
         next_state = self.transition(main_action).copy()     # copy保证返回的next_state不会随着内部self.state的变化而改变
 
-        return next_state, self.reward
+        if i == self.T * self.budget - 1:
+            self.done = True
+        return next_state, self.reward, self.done
 
     def step_hyper(self, z_action_pair_lst):
         # z_action: torch.FloatTensor
@@ -153,11 +161,7 @@ class Environment(object):
             # print(edge_features)
         return self.edge_features
 
-    def init_hyper_z(self):
-        z = np.random.rand(1, 2 * self.node_feat_dimension)
-        print(f"{self.print_tag} hyper parameter z initialized done!")
-        # print(f"z dim is {self.z.ndim}")
-        return z
+
 
     def hyper_model(self):
         '''

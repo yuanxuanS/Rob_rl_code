@@ -1,6 +1,6 @@
 import numpy as np
-import networkx as nx
-from graph import Graph_IM
+
+
 def generate_node_feature(graph, dimension):
     # 返回n个节点特征，特征维度为d
     # 返回 n*d np.array

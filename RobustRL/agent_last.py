@@ -1,4 +1,4 @@
-from models import GAT
+from RobustRL.proj.models import GAT
 import torch
 import numpy as np
 

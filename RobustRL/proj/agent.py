@@ -6,46 +6,68 @@ import copy
 
 
 class DQAgent:
-    def __init__(self, env, lr, model_name,
-                 init_epsilon, train_batch, update_target_steps):
+    def __init__(self, graph_pool, node_feat_pool, hyper_pool, lr, model_name,
+                 node_dim, init_epsilon, train_batch, update_target_steps):
 
-        self.env = env
-        self.graph = self.env.G  # a graph, Graph_IM instance
-        self.z = self.env.z
+        self.graphs = graph_pool
+        self.node_feat_pool = node_feat_pool
+        self.hyper_pool = hyper_pool
+
+        self.graph = None
+        self.z = None
         self.model_name = model_name
-        self.node_features_dims = self.env.node_feat_dimension
-        self.node_features = self.env.node_features
+
+        self.node_features = None
+        self.node_features_dims = node_dim
         # policy
         self.curr_epsilon = init_epsilon
+        self.policy_model = None
+        self.target_model = None
 
-        if self.model_name == 'GAT_QN':
-            # args
-            features_dim = self.node_features_dims
-            hidden_dim = 4
-
-            alpha = 0.2  # leakyReLU的alpha
-            nhead = 1
-
-            self.policy_model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1,  alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=True)
-            self.target_model = GAT(nfeat=features_dim, nhid=hidden_dim, nout=1,  alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=True)
-
-            with torch.no_grad():
-                self.target_model.load_state_dict(self.policy_model.state_dict())
         # buffer
         self.memory = []
 
         # train args
         self.train_batch_size = train_batch     # 训练网络需要的样本数量
-        self.episode_steps = self.env.budget
+
         self.gamma = 0.99
         self.criterion = torch.nn.MSELoss(reduction='mean')
         self.copy_model_steps = update_target_steps
-        self.optimizer = torch.optim.Adam(self.policy_model.parameters(), lr=lr)
+        self.lr = lr
+
+        if self.model_name == 'GAT_QN':
+            hidden_dim = 4
+
+            alpha = 0.2  # leakyReLU的alpha
+            nhead = 1
+
+            self.policy_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
+                                    nheads=nhead, mergeZ=True, mergeState=True)
+            self.target_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
+                                    nheads=nhead, mergeZ=True, mergeState=True)
+
+            with torch.no_grad():
+                self.target_model.load_state_dict(self.policy_model.state_dict())
+
+        self.optimizer = torch.optim.Adam(self.policy_model.parameters(), lr=self.lr)
 
         # test
         self.print_tag = "DQN Agent---"
+
+
+    def init_graph(self, g_id):
+        self.graph = self.graphs[g_id]  # a graph, Graph_IM instance
+
+
+    def init_n_feat(self, ft_id):
+
+        self.node_features = self.node_feat_pool[ft_id]
+
+
+
+
+    def init_hyper(self, hyper_id):
+        self.z = self.hyper_pool[hyper_id]
 
     def reset(self):
         self.iter_step = 1
@@ -83,6 +105,7 @@ class DQAgent:
         '''
         self.memory.append(sample_lst)
 
+
     def get_sample(self):
         if len(self.memory) > self.train_batch_size:
             batch = random.sample(self.memory, self.train_batch_size)
@@ -98,7 +121,7 @@ class DQAgent:
         return batch
         # return state_batch, action_batch, reward_batch, next_state_batch
 
-    def update(self):
+    def update(self, i):
         # 采样batch更新policy_model
             # 从memory中采样
         batch = self.get_sample()
@@ -108,18 +131,18 @@ class DQAgent:
 
         losses = []
         for transition in batch:
-            state, action, reward, next_state = transition
+            state, action, reward, next_state, done, g_id, ft_id, hyper_id = transition
             # 用目标网络计算目标值y
-            if self.iter_step == self.episode_steps:
-                target = reward
-            else:
-                target = reward + self.gamma * self.target_model(self.node_features, self.graph.adj_matrix, next_state, z=self.z).max()
+            graph = self.graphs[g_id]
+            node_feature = self.node_feat_pool[ft_id]
+            hyper = self.hyper_pool[hyper_id]
+            target = reward + (1 - done) * self.gamma * self.target_model(node_feature, graph.adj_matrix, next_state, z=hyper).max()
 
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
             # print(f"{self.print_tag} calculated target q is {target}")
             # 用行为网络计算当前值q
-            q_a = self.policy_model(self.node_features, self.graph.adj_matrix, state, z=self.z)
+            q_a = self.policy_model(node_feature, graph.adj_matrix, state, z=hyper)
             q = q_a[action]
             # print(f"{self.print_tag} calculated action q is {q}")
             # y和q计算loss，更新行为网络
@@ -129,7 +152,7 @@ class DQAgent:
         loss = torch.mean(torch.tensor(losses, requires_grad=True))
         print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
             # 每 C step，更新目标网络 = 当前的行为网络
-        if self.iter_step % self.copy_model_steps == 0:
+        if i % self.copy_model_steps == 0:
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())        #？？ 是这样用吗
 
@@ -140,7 +163,7 @@ class DQAgent:
         loss.backward()
         self.optimizer.step()
 
-        self.iter_step += 1     # 每个step进行一次act和一次update policy network，在update时更新agent当前的step
+
         return self.loss
 
 

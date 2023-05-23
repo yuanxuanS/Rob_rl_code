@@ -1,6 +1,6 @@
 import torch
 import torch.nn.functional as F
-import utils
+from RobustRL.proj import utils
 
 
 class PolicyNetContinuous(torch.nn.Module):

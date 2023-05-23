@@ -23,16 +23,18 @@ import matplotlib.pyplot as plt
 #     plt.savefig("./beta/"+str(i)+".jpg")
 # plt.show()
 
-alpha_lst = np.arange(0.01, 5, 0.1)
-beta_lst = np.arange(0.01, 5, 0.1)
+# alpha_lst = np.arange(0.01, 5, 0.1)
+# beta_lst = np.arange(0.01, 5, 0.1)
+#
+# for alpha in alpha_lst:
+#     for beta in beta_lst:
+#         m = torch.distributions.beta.Beta(alpha, beta)
+#         lst = []
+#         for i in range(3000):
+#             lst.append(m.sample())
+#         print(max(lst), min(lst))
 
-for alpha in alpha_lst:
-    for beta in beta_lst:
-        m = torch.distributions.beta.Beta(alpha, beta)
-        lst = []
-        for i in range(3000):
-            lst.append(m.sample())
-        print(max(lst), min(lst))
+print(1-True)
 # print(torch.exp(torch.tensor(100)))
 # print(torch.rand(1))
 # a = torch.Tensor([2, 3])

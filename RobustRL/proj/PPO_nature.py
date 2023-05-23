@@ -1,5 +1,4 @@
 import random
-import os
 
 import torch
 import torch.nn.functional as F
@@ -8,8 +7,6 @@ from layers import GraphAttentionLayer
 import copy
 import numpy as np
 import utils
-from graph import Graph_IM
-from env import Environment
 
 seed = 10
 torch.manual_seed(seed)
@@ -165,42 +162,66 @@ class GATPolicyNet(GAT):
 
 
 class PPOContinuousAgent:
-    def __init__(self, env, lr, model_name, policy_dis, norm_name, observe_state,
+    def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name, node_nbr, node_dim, policy_dis, norm_name, observe_state,
                  gamma, lmbda, eps, epochs):
         self.print_tag = "PPO Agent---"
-        self.env = env
-        self.graph = self.env.G
+        # necessary env info
+        self.graphs = graph_pool
+        self.node_nbr = node_nbr
+        self.node_features_pool = node_feature_pool
+        self.hyper_pool = hyper_pool
+
         self.actor_lr, self.critic_lr = lr      # [actor_lr, critic_lr]
-        self.node_features_dims = self.env.node_feat_dimension
-        self.node_features = self.env.node_features
-        self.z = self.env.z
+
+        self.node_features = None
+        self.node_features_dims = node_dim
+        self.z = None
         self.observe_state = observe_state
 
         self.policy_dis = policy_dis        # “Beta” or "Gauss"
         self.norm_name = norm_name      # norm method when Gaussian distribution, "sigmoid" or "softmax"
         self.model_name = model_name
-        if self.model_name == 'GAT_PPO':
-            nhid = self.node_features_dims
 
-            alpha = 0.2  # leakyReLU的alpha
-            nhead = 1
-            self.actor = GATPolicyNet(self.graph.node, self.node_features_dims, nhid, 2*self.node_features_dims, alpha, nhead, mergeZ=True, observe_state=self.observe_state)  # 从n个中随意选一个分布
-            self.critic = GATValueNet(self.graph.node, self.node_features_dims, nhid, alpha, nhead, mergeZ=True, observe_state=self.observe_state)
+        self.graph = None
+
+
 
         # buffer
-        self.memory = {}
-
+        self.memory = {'states':[], 'actions':[], 'rewards':[]}
 
         self.gamma = gamma
         self.lmbda = lmbda
         self.eps = eps
         self.epochs = epochs
+
+        if self.model_name == 'GAT_PPO':
+            nhid = self.node_features_dims
+
+            alpha = 0.2  # leakyReLU的alpha
+            nhead = 1
+            self.actor = GATPolicyNet(self.node_nbr, self.node_features_dims, nhid, 2 * self.node_features_dims, alpha,
+                                      nhead, mergeZ=True, observe_state=self.observe_state)  # 从n个中随意选一个分布
+            self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=True,
+                                      observe_state=self.observe_state)
+
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr = self.critic_lr)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
+
+    def init_graph(self, g_id):
+
+        self.graph = self.graphs[g_id]
+
+
+    def init_n_feat(self, ft_id):
+        self.node_features = self.node_features_pool[ft_id]
+
+
+    def init_hyper(self, hyper_id):
+        self.z = self.hyper_pool[hyper_id]
 
     def reset(self):
 
-        self.memory = {'states':[], 'actions':[], 'rewards':[]}
+
         print(f"{self.print_tag} agent reset done!")
 
     def act(self, observation=None):
