@@ -4,7 +4,7 @@ import torch
 from IC import runIC_repeat
 class Environment(object):
 
-    def __init__(self, graph_pool, node_feat_pool, z_pool, T, budget):
+    def __init__(self, graph_pool, node_feat_pool, z_pool, budget):
         ## 图
         self.graphs = graph_pool
         self.node_features_pool = node_feat_pool
@@ -19,7 +19,7 @@ class Environment(object):
         self.edge_features = []     # 通过 generate_edge_feature 拼接生成
 
         ## 网络上的迭代
-        self.T = T      # round nbr
+
         self.budget = budget
         self.state = None
         self.done = False
@@ -60,13 +60,13 @@ class Environment(object):
 
     def init_state(self):
         self.state = np.zeros((1, self.N), dtype=int)  # 二维（1，N）0/1向量，节点加入set对应下标，=1
-        print(f"{self.print_tag} seed set state initialized done!")
+        # print(f"{self.print_tag} seed set state initialized done!")
 
     def get_seed_state(self):
-        print(f'{self.print_tag} current state is {self.state}')
+        # print(f'{self.print_tag} current state is {self.state}')
         # available_action_mask = np.array([1] * self.G.cur_n)
         feasible_action = [idx for idx in range(len(self.state[0])) if self.state[0][idx] == 0]
-        print(f"{self.print_tag} feasible actions are {feasible_action}")
+        # print(f"{self.print_tag} feasible actions are {feasible_action}")
         return self.state, feasible_action
 
     def get_z_state(self):
@@ -102,7 +102,7 @@ class Environment(object):
         # main agent
         next_state = self.transition(main_action).copy()     # copy保证返回的next_state不会随着内部self.state的变化而改变
 
-        if i == self.T * self.budget - 1:
+        if i == self.budget - 1:
             self.done = True
         return next_state, self.reward, self.done
 
@@ -134,7 +134,7 @@ class Environment(object):
 
         # node_features = np.zeros((n, node_feat_dimension))
         node_features = np.random.rand(self.N, self.node_feat_dimension)  # 0-1
-        print(f"{self.print_tag} node feature initialized done!")
+        # print(f"{self.print_tag} node feature initialized done!")
         # print(self.node_features)
         return node_features
 

@@ -37,7 +37,7 @@ def runIC_repeat(G, S, p=0.01, sample=1000):
 
     # with no seeds
     if len(S) == 0:
-        print(f"{print_tag} no seed to influence")
+        # print(f"{print_tag} no seed to influence")
         return 0., 0.
     for i in range(sample):
         T = runIC(G, S, p=p)

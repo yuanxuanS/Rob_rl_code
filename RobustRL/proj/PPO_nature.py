@@ -21,8 +21,8 @@ def _init_fn(worker_id):
     np.random.seed(int(seed))
 
 class GATValueNet(GAT):
-    def __init__(self, node_num, nfeat, nhid, alpha, nheads, mergeZ, observe_state):
-        super(GATValueNet, self).__init__(nfeat, nhid, 1, alpha, nheads, mergeZ, observe_state)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
+    def __init__(self, node_num, nfeat, nhid, alpha, nheads, mergeZ, observe_state, use_cuda, device):
+        super(GATValueNet, self).__init__(nfeat, nhid, 1, alpha, nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         # 映射为一个scalar
         self.map_W = torch.nn.Parameter(torch.empty(node_num, 1))
@@ -59,9 +59,9 @@ class GATValueNet(GAT):
 
 
 class GATPolicyNet(GAT):
-    def __init__(self, node_num, nfeat, nhid, nout, alpha, nheads, mergeZ, observe_state):
+    def __init__(self, node_num, nfeat, nhid, nout, alpha, nheads, mergeZ, observe_state, use_cuda, device):
         super(GATPolicyNet, self).__init__(nfeat, nhid, nout, alpha,
-                                          nheads, mergeZ, observe_state)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
+                                          nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         self.out_att_mu = self.out_att
         self.out_att_std = GraphAttentionLayer(self.nhid * nheads, self.nout, alpha=self.alpha, concat=False, mergeZ=False)   # 只有layer的out_feat = 节点特征维度才能融合（z size才和a相同），所以mergeZ=False
@@ -162,9 +162,13 @@ class GATPolicyNet(GAT):
 
 
 class PPOContinuousAgent:
-    def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name, node_nbr, node_dim, policy_dis, norm_name, observe_state,
-                 gamma, lmbda, eps, epochs):
+    def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name, node_nbr,
+                 node_dim, policy_dis, norm_name, observe_state,
+                 gamma, lmbda, eps, epochs, use_cuda, device):
         self.print_tag = "PPO Agent---"
+        self.use_cuda = use_cuda
+        self.device = device
+
         # necessary env info
         self.graphs = graph_pool
         self.node_nbr = node_nbr
@@ -183,7 +187,7 @@ class PPOContinuousAgent:
         self.model_name = model_name
 
         self.graph = None
-
+        self.adj = None
 
 
         # buffer
@@ -200,9 +204,12 @@ class PPOContinuousAgent:
             alpha = 0.2  # leakyReLU的alpha
             nhead = 1
             self.actor = GATPolicyNet(self.node_nbr, self.node_features_dims, nhid, 2 * self.node_features_dims, alpha,
-                                      nhead, mergeZ=True, observe_state=self.observe_state)  # 从n个中随意选一个分布
+                                      nhead, mergeZ=True, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
             self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=True,
-                                      observe_state=self.observe_state)
+                                      observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)
+            if self.use_cuda:
+                self.actor.to(self.device)
+                self.critic.to(self.device)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)
@@ -210,23 +217,27 @@ class PPOContinuousAgent:
     def init_graph(self, g_id):
 
         self.graph = self.graphs[g_id]
-
+        self.adj = torch.Tensor(self.graph.adj_matrix)
 
     def init_n_feat(self, ft_id):
-        self.node_features = self.node_features_pool[ft_id]
+        self.node_features = torch.Tensor(self.node_features_pool[ft_id])
 
 
     def init_hyper(self, hyper_id):
-        self.z = self.hyper_pool[hyper_id]
+        self.z = torch.Tensor(self.hyper_pool[hyper_id])
 
     def reset(self):
 
 
-        print(f"{self.print_tag} agent reset done!")
-
+        # print(f"{self.print_tag} agent reset done!")
+        pass
     def act(self, observation=None):
 
-        mu, sigma = self.actor(self.node_features, self.graph.adj_matrix, observation, z=self.z)
+        mu, sigma = self.actor(self.node_features.to(self.device), self.adj.to(self.device),
+                               torch.Tensor(observation).to(self.device), z=self.z.to(self.device))
+        if self.use_cuda:
+            mu = mu.cpu()
+            sigma = sigma.cpu()
         if self.policy_dis == "Gauss":
             sigma = torch.sigmoid(sigma)        # Gauss std bounds to 1
             action_dist = torch.distributions.Normal(mu, sigma)     # object, mu sigma维度必须相同，是该位置上的分布参数
@@ -239,8 +250,9 @@ class PPOContinuousAgent:
             action_nosoftmax = action_dist.sample()
             action = action_nosoftmax
         else:
-            print(f"{self.print_tag} wrong dis str")
-        print(f"{self.print_tag} -- action before \n\t\t{action_nosoftmax}\n after norm {action}")
+            # print(f"{self.print_tag} wrong dis str")
+            pass
+        # print(f"{self.print_tag} -- action before \n\t\t{action_nosoftmax}\n after norm {action}")
         return [action_nosoftmax, action]
 
     def norm(self, data):
@@ -260,11 +272,11 @@ class PPOContinuousAgent:
         states = self.memory['states'][0]
         if not isinstance(states, torch.Tensor):
             states = torch.from_numpy(states)
-        print(f"{self.print_tag} state is {states}")
+        # print(f"{self.print_tag} state is {states}")
 
         actions_pair = self.memory['actions'][0]    # [action_nosoftmax, action]
         actions_nosoftmax, actions = actions_pair
-        print(f"{self.print_tag} actions is {actions_pair} and action nosoftmax {actions_nosoftmax} after softmax{actions}")
+        # print(f"{self.print_tag} actions is {actions_pair} and action nosoftmax {actions_nosoftmax} after softmax{actions}")
 
         rewards = self.memory['rewards'][0]
         # rewards = (reward_ + 8.0) / 8.0
@@ -273,18 +285,29 @@ class PPOContinuousAgent:
                 rewards = torch.from_numpy(rewards)
             elif isinstance(rewards, float):
                 rewards  = torch.FloatTensor([rewards])
-        print(f"{self.print_tag} rewards is {rewards}")
+        # print(f"{self.print_tag} rewards is {rewards}")
 
 
         # 时序差分target
 
         # td_target = rewards + self.gamma * self.critic(self.node_features, self.graph.adj_matrix, next_states, add_state=False)
         td_target = rewards
-        td_delta = td_target - self.critic(self.node_features, self.graph.adj_matrix, states, z=self.z)
+        td_target = td_target.to(self.device)
+        states = states.to(self.device)
+        self.z = self.z.to(self.device)
+        td_delta = td_target - self.critic(self.node_features.to(self.device), self.adj.to(self.device),
+                                           states, z=self.z)
+        if self.use_cuda:
+            td_delta = td_delta.cpu()
         # print(f"{self.print_tag} td delta is {td_delta}")
         advantage = utils.compute_advantage(self.gamma, self.lmbda, td_delta)       # one-step，相当于就是td_delta
         # print(f"{self.print_tag} advantage is {advantage}")
-        mu, std = self.actor(self.node_features, self.graph.adj_matrix, states, z=self.z)
+        mu, std = self.actor(self.node_features.to(self.device), self.adj.to(self.device),
+                             states.to(self.device), z=self.z.to(self.device))
+        if self.use_cuda:
+            mu = mu.cpu()
+            std = std.cpu()
+
         if self.policy_dis == "Gauss":
             std = torch.sigmoid(std)
             action_dists = torch.distributions.Normal(mu.detach(), std.detach())        # 这里计算出mu std，后面更新用到这个结果，比如更新网络，不再因为mu std更新的网络的参数
@@ -296,8 +319,12 @@ class PPOContinuousAgent:
             old_log_probs = action_dists.log_prob(actions_nosoftmax)
 
         for e in range(self.epochs):
-            print(f"{self.print_tag} updating --- epoch {e}")
-            mu, std = self.actor(self.node_features, self.graph.adj_matrix, states, z=self.z)
+            # print(f"{self.print_tag} updating --- epoch {e}")
+            mu, std = self.actor(self.node_features.to(self.device), self.adj.to(self.device),
+                                 states.to(self.device), z=self.z.to(self.device))
+            if self.use_cuda:
+                mu = mu.cpu()
+                std = std.cpu()
             # print(f"{self.print_tag} updating-- mu {mu} std {std}")
             if self.policy_dis == "Gauss":
                 std = torch.sigmoid(std)
@@ -309,7 +336,8 @@ class PPOContinuousAgent:
                 action_dists = torch.distributions.beta.Beta(alpha, beta)
                 log_probs = action_dists.log_prob(actions_nosoftmax)
             else:
-                print(f"{self.print_tag} wrong dis str")
+                # print(f"{self.print_tag} wrong dis str")
+                pass
             ratio = torch.exp(log_probs - old_log_probs)
             # print(f"{self.print_tag} updating -- exp-ratio {ratio}")
             # print(f"{self.print_tag} ratio is {ratio}")
@@ -324,8 +352,11 @@ class PPOContinuousAgent:
             torch.autograd.set_detect_anomaly(True)
             # with torch.autograd.detect_anomaly():
             actor_loss = torch.mean(-torch.min(surr1_ratio, surr2_ratio)) * advantage
-            critic_loss = torch.mean(F.mse_loss(self.critic(self.node_features, self.graph.adj_matrix, states, z=self.z), td_target.detach()))
-            print(f"{self.print_tag} updating --- in epoch {e} actor loss {actor_loss} critic loss {critic_loss}")
+            critic_loss = torch.mean(F.mse_loss(self.critic(self.node_features.to(self.device),
+                                                            self.adj.to(self.device),
+                                                            states.to(self.device),
+                                                            z=self.z.to(self.device)), td_target.detach()))
+            # print(f"{self.print_tag} updating --- in epoch {e} actor loss {actor_loss} critic loss {critic_loss}")
 
             self.actor_optimizer.zero_grad()
             self.critic_optimizer.zero_grad()

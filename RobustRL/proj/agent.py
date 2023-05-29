@@ -7,13 +7,16 @@ import copy
 
 class DQAgent:
     def __init__(self, graph_pool, node_feat_pool, hyper_pool, lr, model_name,
-                 node_dim, init_epsilon, train_batch, update_target_steps):
+                 node_dim, init_epsilon, train_batch, update_target_steps, use_cuda, device):
 
+        self.use_cuda = use_cuda
+        self.device = device
         self.graphs = graph_pool
         self.node_feat_pool = node_feat_pool
         self.hyper_pool = hyper_pool
 
         self.graph = None
+        self.adj = None
         self.z = None
         self.model_name = model_name
 
@@ -42,10 +45,12 @@ class DQAgent:
             nhead = 1
 
             self.policy_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=True)
+                                    nheads=nhead, mergeZ=True, mergeState=True, use_cuda=self.use_cuda, device=self.device)
             self.target_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=True)
-
+                                    nheads=nhead, mergeZ=True, mergeState=True, use_cuda=self.use_cuda, device=self.device)
+            if self.use_cuda:
+                self.policy_model.to(self.device)
+                self.target_model.to(self.device)
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())
 
@@ -57,21 +62,21 @@ class DQAgent:
 
     def init_graph(self, g_id):
         self.graph = self.graphs[g_id]  # a graph, Graph_IM instance
-
+        self.adj = torch.Tensor(self.graph.adj_matrix)
 
     def init_n_feat(self, ft_id):
 
-        self.node_features = self.node_feat_pool[ft_id]
+        self.node_features = torch.Tensor(self.node_feat_pool[ft_id])
 
 
 
 
     def init_hyper(self, hyper_id):
-        self.z = self.hyper_pool[hyper_id]
+        self.z = torch.Tensor(self.hyper_pool[hyper_id])
 
     def reset(self):
         self.iter_step = 1
-        print(f"{self.print_tag} agent reset done!")
+        # print(f"{self.print_tag} agent reset done!")
 
     def act(self, observation, feasible_action):
         # policy
@@ -84,9 +89,13 @@ class DQAgent:
             # node_features 融合state
             # print(f"{self.print_tag} adj_matrix is {self.graph.adj_matrix}")
             input_node_feat = copy.deepcopy(self.node_features)
-            q_a = self.policy_model(input_node_feat, self.graph.adj_matrix, observation, z=self.z)
+            q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
+                                    torch.Tensor(observation).to(self.device), z=self.z.to(self.device))
+            if self.use_cuda:
+                q_a = q_a.cpu()
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
-            print(f"{self.print_tag} infeasible action is {infeasible_action}")
+            # print(f"{self.print_tag} infeasible action is {infeasible_action}")
+
             q_a[infeasible_action] = -9e15
             # print(f"{self.print_tag} final q_a is {q_a}")
             action = q_a.argmax()
@@ -109,10 +118,10 @@ class DQAgent:
     def get_sample(self):
         if len(self.memory) > self.train_batch_size:
             batch = random.sample(self.memory, self.train_batch_size)
-            print(f"{self.print_tag} batch is {batch}")
+            # print(f"{self.print_tag} batch is {batch}")
             # print(f" zip is {list(zip(*batch))}")
             state_batch = list(list(zip(*batch))[0])
-            print(f"state batch is {state_batch}")
+            # print(f"state batch is {state_batch}")
             action_batch = list(list(zip(*batch))[1])
             reward_batch = list(list(zip(*batch))[2])
             next_state_batch = list(list(zip(*batch))[3])
@@ -126,7 +135,7 @@ class DQAgent:
             # 从memory中采样
         batch = self.get_sample()
         if not batch:
-            print(f"{self.print_tag} no enough sample and no update")
+            # print(f"{self.print_tag} no enough sample and no update")
             return 0.
 
         losses = []
@@ -134,23 +143,29 @@ class DQAgent:
             state, action, reward, next_state, done, g_id, ft_id, hyper_id = transition
             # 用目标网络计算目标值y
             graph = self.graphs[g_id]
-            node_feature = self.node_feat_pool[ft_id]
-            hyper = self.hyper_pool[hyper_id]
-            target = reward + (1 - done) * self.gamma * self.target_model(node_feature, graph.adj_matrix, next_state, z=hyper).max()
+            adj = torch.Tensor(graph.adj_matrix)
+            node_feature = torch.Tensor(self.node_feat_pool[ft_id])
+            hyper = torch.Tensor(self.hyper_pool[hyper_id])
+            target = reward + (1 - done) * self.gamma * self.target_model(node_feature.to(self.device), adj.to(self.device),
+                                                                          torch.Tensor(next_state).to(self.device), z=hyper.to(self.device)).max()
 
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
             # print(f"{self.print_tag} calculated target q is {target}")
             # 用行为网络计算当前值q
-            q_a = self.policy_model(node_feature, graph.adj_matrix, state, z=hyper)
+            q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                    torch.Tensor(state).to(self.device), z=hyper.to(self.device))
+            
+            
             q = q_a[action]
             # print(f"{self.print_tag} calculated action q is {q}")
             # y和q计算loss，更新行为网络
+            # print(f"q type {q.device}| target {target.device} ")
             loss_cur = self.criterion(q, target)
 
             losses.append(loss_cur)
         loss = torch.mean(torch.tensor(losses, requires_grad=True))
-        print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
+        # print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
             # 每 C step，更新目标网络 = 当前的行为网络
         if i % self.copy_model_steps == 0:
             with torch.no_grad():
