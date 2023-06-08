@@ -1,6 +1,6 @@
 
 import os
-
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 from env import Environment
@@ -12,7 +12,6 @@ import time
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-writer = SummaryWriter("./log")
 # sys.stdout = open(os.devnull, 'w')
 
 
@@ -43,17 +42,30 @@ def gener_z(node_dim, z_nbr):
     return z_dic
 
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--graph-pool-nbr", type=int, default=1)
+parser.add_argument("--nodes", type=int, default=20)
+parser.add_argument("--node-feat-dims", type=int, default=3)
+parser.add_argument("--feat-pool-nbr", type=int, default=1)
+parser.add_argument("--z-pool-nbr", type=int, default=1)
+parser.add_argument("--budget", type=int, default=3)
+parser.add_argument("--episodes", type=int, default=10)
+parser.add_argument("--use-cuda", type=bool, default=False)
+parser.add_argument("--with-nature", type=bool, default=False)
 
-# train and env
-epoches = 10
+args = parser.parse_args()
 
-budget = 2  #
-propagate_p = 0.7
-cascade = None
-epsilon = 0.3
-batch_size = 2
-update_target_steps = 2       # copy policy_model -> target model
-main_lr = 1e-3
+
+# env : pools
+graph_nbr_train = args.graph_pool_nbr     # number of trained graphs in pool
+node_nbr = args.nodes       # number of graph nodes
+graph_pool = load_graph(graph_nbr_train, node_nbr)
+node_dim = args.node_feat_dims
+feat_nbr = args.feat_pool_nbr        # number of trained features in pool
+node_feat_pool = gener_node_features(node_nbr, node_dim, feat_nbr)
+z_nbr = args.z_pool_nbr       # number of trained z in pool
+z_pool = gener_z(node_dim, z_nbr)
+
 
 # nature
 actor_lr = 1e-5
@@ -67,36 +79,51 @@ epochs = 10
 eps = 0.2
 canObserveState = False
 
+# main 's training settings
+budget = args.budget  #
 
-# train
-graph_nbr_train = 1
-node_nbr = 10
-graph_pool = load_graph(graph_nbr_train, node_nbr)
-node_dim = 3
-feat_nbr = 1
-node_feat_pool = gener_node_features(node_nbr, node_dim, feat_nbr)
-z_nbr = 1
-z_pool = gener_z(node_dim, z_nbr)
+cascade = None
+epsilon = 0.3
+batch_size = 5
+update_target_steps = 5       # copy policy_model -> target model
+main_lr = 1e-3
+
+
+# other training setting
+propagate_p = 0.7
+with_nature = args.with_nature
+method = 'random'       # rl
 
 # gpu
 flag = torch.cuda.is_available()
 print(f"GPU is {flag} and {torch.cuda.device_count()} gpus")
 ngpu = 1
-use_cuda = True
+use_cuda = args.use_cuda
 device = torch.device("cuda:0" if (torch.cuda.is_available() and use_cuda) else "cpu")
-print(f"get GPU device {device}")
+print(f"get device {device}")
 
 
+# initialize
 env = Environment(graph_pool, node_feat_pool, z_pool, budget)      #
 nature_agent = PPOContinuousAgent(graph_pool, node_feat_pool, z_pool, nature_lr, 'GAT_PPO', node_nbr, node_dim, PolicyDisName, PolicyNormName, canObserveState, gamma,
                                       lmbda, eps, epochs, use_cuda, device)
-main_agent = DQAgent(graph_pool, node_feat_pool, z_pool, main_lr, 'GAT_QN', node_dim, epsilon, batch_size, update_target_steps, use_cuda, device)
+
+if method == 'rl':
+    model_name = 'GAT_QN'
+elif method == 'random':
+    model_name = 'random'
+
+main_agent = DQAgent(graph_pool, node_feat_pool, z_pool, main_lr, model_name, node_dim, epsilon, batch_size, update_target_steps, use_cuda, device)
 
 st = time.time()
 
+# tensorboard
+starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
+writer = SummaryWriter("./log/"+starttime[:13]+"-"+str(node_nbr)+" nodes -"+str(budget)+" budgets")
 
-print(f"first {next(main_agent.policy_model.parameters()).device}")
-print(f"start time {time.time()}")
+
+# print(f"first {next(main_agent.policy_model.parameters()).device}")
+print(f"start time {starttime}")
 
 y_cumulative_reward = []
 nature_critic_loss = []
@@ -121,21 +148,24 @@ for g_id, graph in graph_pool.items():
             nature_agent.init_hyper(hyper_id)
             main_agent.init_hyper(hyper_id)
 
-            print(f"second {next(main_agent.policy_model.parameters()).device}")
+            # print(f"second {next(main_agent.policy_model.parameters()).device}")
 
             # train
-            episodes = 5
+
+            episodes = args.episodes
             for episode in range(episodes):       #  one-step, adversary is a bandit
                 global_iter += 1
                 print(f"this is -- {global_iter} iteration")
                 
                 env.reset()
-                nature_agent.reset()
+                if with_nature:
+                    nature_agent.reset()
 
-                nature_state, _ = env.get_seed_state()
-                z_action_pair_lst = nature_agent.act(nature_state)
-                z_new = env.step_hyper(z_action_pair_lst)
+                    nature_state, _ = env.get_seed_state()
+                    z_action_pair_lst = nature_agent.act(nature_state)
+                    z_new = env.step_hyper(z_action_pair_lst)
 
+                
                 # main agent
                 main_agent.reset()
                 cumul_reward = 0.
@@ -149,40 +179,50 @@ for g_id, graph in graph_pool.items():
                     # print(f"action is {action} ")
                     next_state, reward, done = env.step_seed(i, action)
 
+
                     # add to buffer
-                    sample = [state, action, reward, next_state, done, g_id, ft_id, hyper_id]
-                    main_agent.remember(sample)
+                    if method == 'rl':
+                        sample = [state, action, reward, next_state, done, g_id, ft_id, hyper_id]
+                        main_agent.remember(sample)
+                    elif method == 'random':
+                        pass
 
                     cumul_reward += reward
                     sub_reward.append(reward)
 
                     # get sample and update the main model, GAT
-                    loss = main_agent.update(i)
-                    main_loss.append(loss)
-                    sub_loss += loss
+                    if method == "rl":
+                        loss = main_agent.update(i)
+                        main_loss.append(loss)
+                        sub_loss += loss
+                    elif method == "random":
+                        pass
                     # print(f"loss is {loss}")
 
                 y_cumulative_reward.append(cumul_reward)
-                main_loss_episode.append(sub_loss / env.budget)
+                if method == "rl":
+                    main_loss_episode.append(sub_loss / env.budget)
                 # print(f"cumulative reward is {cumul_reward}")
                 # plot
                 # plt.plot(range(env.budget), sub_reward)
                 # plt.title("reward per step")
                 # plt.show()
 
-
-                # nature agent
-                nature_agent.remember(nature_state, z_action_pair_lst, -cumul_reward)
-                # get a trajectory and update the nature model
-                act_loss_nature, cri_loss_nature = nature_agent.update()
+                if with_nature:
+                    # nature agent
+                    nature_agent.remember(nature_state, z_action_pair_lst, -cumul_reward)
+                    # get a trajectory and update the nature model
+                    act_loss_nature, cri_loss_nature = nature_agent.update()
                 # print(f"actor loss {act_loss_nature} critic loss {cri_loss_nature}")
                 # nature_critic_loss.append(cri_loss_nature.item())
                 # nature_actor_loss.append(act_loss_nature.item())
 
-                writer.add_scalar(f'main/GPU={use_cuda}/cumulative reward per episode', cumul_reward, global_iter)
-                writer.add_scalar(f'main/GPU={use_cuda}/mean loss ', sub_loss / env.budget, global_iter)
-                writer.add_scalar(f'nature/GPU={use_cuda}/actor loss ', act_loss_nature.item(), global_iter)
-                writer.add_scalar(f'nature/GPU={use_cuda}/critic loss ', cri_loss_nature.item(), global_iter)
+                writer.add_scalar(f'main/GPU={use_cuda}/nature={with_nature}/cumulative reward per episode', cumul_reward, global_iter)
+                if method == "rl":
+                    writer.add_scalar(f'main/GPU={use_cuda}/nature={with_nature}mean loss ', sub_loss / env.budget, global_iter)
+                if with_nature:
+                    writer.add_scalar(f'nature/GPU={use_cuda}/actor loss ', act_loss_nature.item(), global_iter)
+                    writer.add_scalar(f'nature/GPU={use_cuda}/critic loss ', cri_loss_nature.item(), global_iter)
 
 
 writer.close()
@@ -213,6 +253,6 @@ print(f"run time {time.time() - st}")
 # plt.plot(range(global_iter), main_loss_episode)
 # plt.title("mean loss of main agent every episode")
 # plt.savefig("mean_loss per episode.png")
-print(f"{list(main_agent.policy_model.named_children())}")
-print(f"third {next(main_agent.policy_model.parameters()).device}")
+# print(f"{list(main_agent.policy_model.named_children())}")
+# print(f"third {next(main_agent.policy_model.parameters()).device}")
 

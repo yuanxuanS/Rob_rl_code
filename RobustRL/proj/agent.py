@@ -54,7 +54,13 @@ class DQAgent:
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())
 
-        self.optimizer = torch.optim.Adam(self.policy_model.parameters(), lr=self.lr)
+            self.optimizer = torch.optim.Adam(self.policy_model.parameters(), lr=self.lr)
+            
+        elif self.model_name == "random":
+            self.policy_model = None
+            self.target_model = None
+
+
 
         # test
         self.print_tag = "DQN Agent---"
@@ -80,26 +86,30 @@ class DQAgent:
 
     def act(self, observation, feasible_action):
         # policy
+        if self.model_name == 'GAT_QN':
+            if self.curr_epsilon > np.random.rand():
+                action = np.random.choice(feasible_action)
+                # print(f"action is {action}")
+            else:
+                # GAT, 输入所有节点特征， 图的结构关系-邻接矩阵，
+                # node_features 融合state
+                # print(f"{self.print_tag} adj_matrix is {self.graph.adj_matrix}")
+                input_node_feat = copy.deepcopy(self.node_features)
+                q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
+                                        torch.Tensor(observation).to(self.device), z=self.z.to(self.device))
+                if self.use_cuda:
+                    q_a = q_a.cpu()
+                infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
+                # print(f"{self.print_tag} infeasible action is {infeasible_action}")
 
-        if self.curr_epsilon > np.random.rand():
+                q_a[infeasible_action] = -9e15
+                # print(f"{self.print_tag} final q_a is {q_a}")
+                action = q_a.argmax()
+
+
+
+        elif self.model_name == "random":
             action = np.random.choice(feasible_action)
-            # print(f"action is {action}")
-        else:
-            # GAT, 输入所有节点特征， 图的结构关系-邻接矩阵，
-            # node_features 融合state
-            # print(f"{self.print_tag} adj_matrix is {self.graph.adj_matrix}")
-            input_node_feat = copy.deepcopy(self.node_features)
-            q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
-                                    torch.Tensor(observation).to(self.device), z=self.z.to(self.device))
-            if self.use_cuda:
-                q_a = q_a.cpu()
-            infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
-            # print(f"{self.print_tag} infeasible action is {infeasible_action}")
-
-            q_a[infeasible_action] = -9e15
-            # print(f"{self.print_tag} final q_a is {q_a}")
-            action = q_a.argmax()
-
 
         if not isinstance(action, int):
             action = int(action)
