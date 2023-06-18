@@ -164,9 +164,10 @@ class GATPolicyNet(GAT):
 class PPOContinuousAgent:
     def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name, node_nbr,
                  node_dim, policy_dis, norm_name, observe_state,
-                 gamma, lmbda, eps, epochs, use_cuda, device):
+                 gamma, lmbda, eps, epochs, use_cuda, merge_z, device):
         self.print_tag = "PPO Agent---"
         self.use_cuda = use_cuda
+        self.merge_z = merge_z
         self.device = device
 
         # necessary env info
@@ -204,8 +205,8 @@ class PPOContinuousAgent:
             alpha = 0.2  # leakyReLU的alpha
             nhead = 1
             self.actor = GATPolicyNet(self.node_nbr, self.node_features_dims, nhid, 2 * self.node_features_dims, alpha,
-                                      nhead, mergeZ=True, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
-            self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=True,
+                                      nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
+            self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=self.merge_z,
                                       observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)
             if self.use_cuda:
                 self.actor.to(self.device)

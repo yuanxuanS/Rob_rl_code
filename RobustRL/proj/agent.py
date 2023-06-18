@@ -7,9 +7,10 @@ import copy
 
 class DQAgent:
     def __init__(self, graph_pool, node_feat_pool, hyper_pool, lr, model_name,
-                 node_dim, init_epsilon, train_batch, update_target_steps, use_cuda, device):
+                 node_dim, init_epsilon, train_batch, update_target_steps, use_cuda, merge_z, device):
 
         self.use_cuda = use_cuda
+        self.merge_z = merge_z
         self.device = device
         self.graphs = graph_pool
         self.node_feat_pool = node_feat_pool
@@ -45,9 +46,9 @@ class DQAgent:
             nhead = 1
 
             self.policy_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=True, use_cuda=self.use_cuda, device=self.device)
+                                    nheads=nhead, mergeZ=True, mergeState=self.merge_z, use_cuda=self.use_cuda, device=self.device)
             self.target_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=True, use_cuda=self.use_cuda, device=self.device)
+                                    nheads=nhead, mergeZ=True, mergeState=self.merge_z, use_cuda=self.use_cuda, device=self.device)
             if self.use_cuda:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)

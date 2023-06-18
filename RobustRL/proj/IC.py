@@ -32,7 +32,7 @@ def runIC(G, S, p=0.1):
                 T.append(v)
     return T
 
-def runIC_repeat(G, S, p=0.01, sample=1000):
+def runIC_repeat(G, S, p=0.01, sample=100):
     infl_list = []
 
     # with no seeds
