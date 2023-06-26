@@ -11,16 +11,28 @@ import sys
 import time
 import torch
 from torch.utils.tensorboard import SummaryWriter
-
+import networkx as nx
 # sys.stdout = open(os.devnull, 'w')
 
 
-def load_graph(graph_nbr_train, node_nbr):
+def load_graph(graph_nbr_train, node_nbr, logdir, logtime):
     graph_dic = {}
     for graph_ in range(graph_nbr_train):
         seed = graph_
-        graph_dic[graph_] = Graph_IM(nodes=node_nbr, edges_p=0.5, seed=seed)
+        G = Graph_IM(nodes=node_nbr, edges_p=0.08, seed=seed)
+        graph_dic[graph_] = G
         graph_dic[graph_].graph_name = str(graph_)
+        # degree
+        degree = dict(nx.degree(G.graph))
+        avg_degree = sum(degree.values()) / G.node
+        print(f"Graph {graph_}: average degree {avg_degree}")
+        # degree histogram
+        x = list(range(max(degree.values())+1))
+        y = [i / sum(nx.degree_histogram(G.graph)) for i in nx.degree_histogram(G.graph)]
+        plt.bar(x, y, color="blue")
+        plt.xlabel("$k$")
+        plt.ylabel("$p_k$")
+        plt.savefig("./log/"+logdir+"/"+logtime+"_"+str(graph_)+".png")
 
     # print('train graphs in total: ', len(graph_dic))
     return graph_dic
@@ -30,7 +42,11 @@ def gener_node_features(node_nbr, node_dim, feat_nbr):
     for f in range(feat_nbr):
         seed = f
         np.random.seed(seed)
-        n_feat_dic[f] = np.random.rand(node_nbr, node_dim)  # 0-1
+
+
+        tmp = np.random.normal(loc=0.5, scale=3, size=(node_nbr, node_dim))
+
+        n_feat_dic[f] = np.clip(tmp, a_min=0, a_max=1)  # 0-1
     return n_feat_dic
 
 def gener_z(node_dim, z_nbr):
@@ -38,7 +54,7 @@ def gener_z(node_dim, z_nbr):
     for z_i in range(z_nbr):
         seed = z_i
         np.random.seed(seed)
-        z_dic[z_i] = np.random.rand(1, 2 * node_dim)        # uniform distribution
+        # z_dic[z_i] = np.random.rand(1, 2 * node_dim)        # uniform distribution
         tmp = np.random.normal(loc=0.5, scale=3, size=(1, 2*node_dim))
         z_dic[z_i] = np.clip(tmp, a_min=0, a_max=1)
     return z_dic
@@ -47,6 +63,7 @@ def gener_z(node_dim, z_nbr):
 parser = argparse.ArgumentParser()
 # log setting
 parser.add_argument("--logdir", type=str, default="")
+parser.add_argument("--logtime", type=str, default="")
 # algor setting
 parser.add_argument("--graph-pool-nbr", type=int, default=1)
 parser.add_argument("--nodes", type=int, default=100)
@@ -72,7 +89,7 @@ env_setting = {"graph_pool_n": args.graph_pool_nbr,     # number of trained grap
                }
 
 
-graph_pool = load_graph(env_setting["graph_pool_n"], env_setting["nodes"])
+graph_pool = load_graph(env_setting["graph_pool_n"], env_setting["nodes"], args.logdir, args.logtime)
 node_feat_pool = gener_node_features(env_setting["nodes"], env_setting["node_feat_dims"], env_setting["feat_pool_n"])
 z_pool = gener_z(env_setting["node_feat_dims"], env_setting["z_pool_n"])
 propagate_p = 0.7
@@ -99,7 +116,7 @@ main_setting = {
 
 cascade = None
 epsilon = 0.3
-batch_size = 5
+batch_size = 16
 update_target_steps = 5       # copy policy_model -> target model
 main_lr = 1e-3
 
@@ -183,7 +200,7 @@ for g_id, graph in graph_pool.items():
     env.init_graph(g_id)
     nature_agent.init_graph(g_id)
     main_agent.init_graph(g_id)
-
+    print(f"----------- training in graph {g_id}")
     for ft_id, feat in node_feat_pool.items():
         env.init_n_feat(ft_id)
         nature_agent.init_n_feat(ft_id)
@@ -224,7 +241,7 @@ for g_id, graph in graph_pool.items():
                     action = main_agent.act(state, feasible_action)
                     # print(f"action is {action} ")
                     next_state, reward, done = env.step_seed(i, action)
-                    print(f"get reward is {reward}")
+                    # print(f"get reward is {reward}")
 
                     # add to buffer
                     if main_setting["agent_method"] == 'rl':
