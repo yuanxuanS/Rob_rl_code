@@ -270,23 +270,23 @@ class PPOContinuousAgent:
 
     def update(self):
         # print(f"{self.print_tag} memory is {self.memory}")
-        states = self.memory['states'][0]
+        states = self.memory['states'][-1]
         if not isinstance(states, torch.Tensor):
             states = torch.from_numpy(states)
-        # print(f"{self.print_tag} state is {states}")
+        print(f"{self.print_tag} state is {states}")
 
-        actions_pair = self.memory['actions'][0]    # [action_nosoftmax, action]
+        actions_pair = self.memory['actions'][-1]    # [action_nosoftmax, action]
         actions_nosoftmax, actions = actions_pair
-        # print(f"{self.print_tag} actions is {actions_pair} and action nosoftmax {actions_nosoftmax} after softmax{actions}")
+        print(f"{self.print_tag} actions is {actions_pair} and action nosoftmax {actions_nosoftmax} after softmax{actions}")
 
-        rewards = self.memory['rewards'][0]
+        rewards = self.memory['rewards'][-1]
         # rewards = (reward_ + 8.0) / 8.0
         if not isinstance(rewards, torch.Tensor):
             if isinstance(rewards, np.ndarray):
                 rewards = torch.from_numpy(rewards)
             elif isinstance(rewards, float):
                 rewards  = torch.FloatTensor([rewards])
-        # print(f"{self.print_tag} rewards is {rewards}")
+        print(f"{self.print_tag} rewards is {rewards}")
 
 
         # 时序差分target
@@ -300,9 +300,9 @@ class PPOContinuousAgent:
                                            states, z=self.z)
         if self.use_cuda:
             td_delta = td_delta.cpu()
-        # print(f"{self.print_tag} td delta is {td_delta}")
+        print(f"{self.print_tag} td delta is {td_delta}")
         advantage = utils.compute_advantage(self.gamma, self.lmbda, td_delta)       # one-step，相当于就是td_delta
-        # print(f"{self.print_tag} advantage is {advantage}")
+        print(f"{self.print_tag} advantage is {advantage}")
         mu, std = self.actor(self.node_features.to(self.device), self.adj.to(self.device),
                              states.to(self.device), z=self.z.to(self.device))
         if self.use_cuda:
@@ -339,9 +339,10 @@ class PPOContinuousAgent:
             else:
                 # print(f"{self.print_tag} wrong dis str")
                 pass
+            # print(f"{self.print_tag} updating -- log probs is {log_probs}")
             ratio = torch.exp(log_probs - old_log_probs)
             # print(f"{self.print_tag} updating -- exp-ratio {ratio}")
-            # print(f"{self.print_tag} ratio is {ratio}")
+
 
             # surr1 = ratio * advantage
             # surr2 = torch.clamp(ratio, 1 - self.eps, 1 + self.eps) * advantage
@@ -352,7 +353,10 @@ class PPOContinuousAgent:
             surr2_ratio = torch.clamp(ratio, 1 - self.eps, 1 + self.eps)
             torch.autograd.set_detect_anomaly(True)
             # with torch.autograd.detect_anomaly():
-            actor_loss = torch.mean(-torch.min(surr1_ratio, surr2_ratio)) * advantage
+            print(f"{self.print_tag} updating -- surr1 -ratio {surr1_ratio}")
+            print(f"{self.print_tag} updating -- surr2 -ratio {surr2_ratio}")
+
+            actor_loss = torch.mean(-torch.min(surr1_ratio, surr2_ratio) * advantage)
             critic_loss = torch.mean(F.mse_loss(self.critic(self.node_features.to(self.device),
                                                             self.adj.to(self.device),
                                                             states.to(self.device),

@@ -7,7 +7,7 @@ class GraphAttentionLayer(nn.Module):
     """
     Simple GAT layer, similar to https://arxiv.org/abs/1710.10903
     """
-    def __init__(self, in_features, out_features, alpha, concat=True, mergeZ=True, node_dim=None):
+    def __init__(self, in_features, out_features, alpha, concat=True, mergeZ=False, node_dim=None):
         super(GraphAttentionLayer, self).__init__()
 
         self.in_features = in_features
