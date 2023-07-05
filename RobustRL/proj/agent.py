@@ -85,10 +85,11 @@ class DQAgent:
         self.iter_step = 1
         # print(f"{self.print_tag} agent reset done!")
 
-    def act(self, observation, feasible_action):
+    def act(self, observation, feasible_action, mode):
         # policy
         if self.model_name == 'GAT_QN':
-            if self.curr_epsilon > np.random.rand():
+
+            if self.curr_epsilon > np.random.rand() and mode != "valid":
                 action = np.random.choice(feasible_action)
                 # print(f"action is {action}")
             else:
@@ -106,8 +107,6 @@ class DQAgent:
                 q_a[infeasible_action] = -9e15
                 # print(f"{self.print_tag} final q_a is {q_a}")
                 action = q_a.argmax()
-
-
 
         elif self.model_name == "random":
             action = np.random.choice(feasible_action)
