@@ -1,5 +1,11 @@
 import random
 import numpy as np
+import logging
+logging.basicConfig(level=logging.DEBUG,
+                    format='(%(threadName)-10s) %(message)s',
+                    )
+
+
 class Runner:
     def __init__(self, environment, env_setting, agent, main_setting, nature,
                  training_setting, device_setting, writer):
@@ -30,7 +36,7 @@ class Runner:
                 self.environment.init_graph(g_id)
                 self.nature.init_graph(g_id)
                 self.agent.init_graph(g_id)
-                print(f"-"*10 + f" valid : {episode} round in {r} valid graph, graph-{g_id}")
+                logging.info(f"-"*10 + f" valid : {episode} round in {r} valid graph, graph-{g_id}")
 
                 # sample node feature
                 ft_id = 0
@@ -49,9 +55,12 @@ class Runner:
                 if self.training_setting["with_nature"]:
                     self.nature.reset()
                     if self.env_setting["hyper_way"] == "rl_nature":
+                        logging.info("generate hyperparams by nature in valid")
                         nature_state, _ = self.environment.get_seed_state()
                         z_action_pair_lst = self.nature.act(nature_state)
                         z_new = self.environment.step_hyper(z_action_pair_lst)
+                    else:
+                        logging.info("generate hyperparams by random in valid")
 
                 # main agent
                 self.agent.reset()
@@ -64,9 +73,9 @@ class Runner:
                     # print(f"---------- sub step {i}")
                     state, feasible_action = self.environment.get_seed_state()  # [1, N]
                     action = self.agent.act(state, feasible_action, "valid")
-                    print(f"main agent action is {action} ")
+                    logging.info(f"main agent action is {action} ")
                     next_state, reward, done = self.environment.step_seed(i, action)
-                    print(f"get reward is {reward}")
+                    logging.info(f"get reward is {reward}")
 
 
                     cumul_reward += reward
@@ -88,7 +97,7 @@ class Runner:
             self.environment.init_graph(g_id)
             self.nature.init_graph(g_id)
             self.agent.init_graph(g_id)
-            print(f"-----------this is -- {self.global_iter} iteration,  training in graph {g_id}")
+            logging.info(f"-----------this is -- {self.global_iter} iteration,  training in graph {g_id}")
 
             # sample node feature
             ft_id = 0
@@ -120,9 +129,9 @@ class Runner:
                 # print(f"---------- sub step {i}")
                 state, feasible_action = self.environment.get_seed_state()  # [1, N]
                 action = self.agent.act(state, feasible_action, "train")
-                print(f"main agent action is {action} ")
+                logging.info(f"main agent action is {action} ")
                 next_state, reward, done = self.environment.step_seed(i, action)
-                print(f"get reward is {reward}")
+                logging.info(f"get reward is {reward}")
 
                 # add to buffer
                 if self.main_setting["agent_method"] == 'rl':
@@ -174,13 +183,16 @@ class Runner:
                 self.writer.add_scalar(f'nature/GPU={self.device_setting["use_cuda"]}/critic loss ', cri_loss_nature.item(),
                                   self.global_iter)
 
-            # validation
-            if self.global_iter % self.training_setting["valid_every"] == 0:
-                print("-"*10+ f"in checkpoint inter: {self.global_iter}")
-                episode_accumulated_rewards = self.valid()      # 5， 20
-                print(episode_accumulated_rewards)
-                average_accumulated_rewards = np.mean(episode_accumulated_rewards, axis=1)      # 5, 1dims
-                for r in range(self.env_setting["valid_graph_nbr"]):
-                    g_id = self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] + r
-                    self.writer.add_scalar(f"valid in graph: {g_id}/ env z by: {self.env_setting['hyper_way']}", average_accumulated_rewards[r], self.global_iter)
 
+    def final_valid(self):
+        # validation at the end
+
+        logging.info("-"*10+ f" validation from inter: {self.global_iter}")
+        episode_accumulated_rewards = self.valid()      # valid graph nbr， 20
+        logging.info(episode_accumulated_rewards)
+        average_accumulated_rewards = np.mean(episode_accumulated_rewards, axis=1)      # 5, 1dims
+        for r in range(self.env_setting["valid_graph_nbr"]):
+            g_id = self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] + r
+            self.writer.add_scalar(f"valid in graph: {g_id}/ env z by: {self.env_setting['hyper_way']}", average_accumulated_rewards[r], self.global_iter)
+
+        return average_accumulated_rewards

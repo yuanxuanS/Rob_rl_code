@@ -2,13 +2,16 @@ import random
 
 import torch
 import torch.nn.functional as F
+from torchsummary import summary
 from models import GAT
 from layers import GraphAttentionLayer
 import copy
 import numpy as np
 import utils
+import seed
 
-seed = 10
+
+seed = seed.get_value()
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
 torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
@@ -162,8 +165,9 @@ class GATPolicyNet(GAT):
 
 
 class PPOContinuousAgent:
-    def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name, node_nbr,
-                 node_dim, policy_dis, norm_name, observe_state,
+    def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name,
+                 alpha, nheads, hidden_dims,
+                 node_nbr, node_dim, policy_dis, norm_name, observe_state,
                  gamma, lmbda, eps, epochs, use_cuda, merge_z, device):
         self.print_tag = "PPO Agent---"
         self.use_cuda = use_cuda
@@ -200,17 +204,26 @@ class PPOContinuousAgent:
         self.epochs = epochs
 
         if self.model_name == 'GAT_PPO':
-            nhid = self.node_features_dims
+            nhid = hidden_dims
 
-            alpha = 0.2  # leakyReLU的alpha
-            nhead = 1
+            alpha = alpha  # leakyReLU的alpha
+            nhead = nheads
             self.actor = GATPolicyNet(self.node_nbr, self.node_features_dims, nhid, 2 * self.node_features_dims, alpha,
                                       nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
             self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=self.merge_z,
                                       observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)
+            #
+
             if self.use_cuda:
                 self.actor.to(self.device)
                 self.critic.to(self.device)
+
+            print("PPO- actor architecture")
+            # summary(self.actor, ((self.node_nbr, self.node_features_dims), (self.node_nbr, self.node_nbr)))
+            print(self.actor)
+            print("PPO- critic architecture")
+            # summary(self.critic, ((self.node_nbr, self.node_features_dims), (self.node_nbr, self.node_nbr)))
+            print(self.critic)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)

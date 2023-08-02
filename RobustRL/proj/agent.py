@@ -3,11 +3,23 @@ import torch
 import numpy as np
 import random
 import copy
+import seed
 
+
+seed = seed.get_value()
+torch.manual_seed(seed)
+torch.cuda.manual_seed(seed)
+torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU.
+np.random.seed(seed)  # Numpy module.
+random.seed(seed)  # Python random module.
+torch.manual_seed(seed)
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
 
 class DQAgent:
     def __init__(self, graph_pool, node_feat_pool, hyper_pool, lr, model_name,
-                 node_dim, init_epsilon, train_batch, update_target_steps, use_cuda, merge_z, device):
+                 alpha, nheads, node_dim, hidden_dims,
+                 init_epsilon, train_batch, update_target_steps, use_cuda, merge_z, device):
 
         self.use_cuda = use_cuda
         self.merge_z = merge_z
@@ -30,8 +42,10 @@ class DQAgent:
 
         # buffer
         self.memory = []
+        self.buffer_max = 500       # equal to global iterations
 
         # train args
+        self.basic_batch_size = train_batch
         self.train_batch_size = train_batch     # 训练网络需要的样本数量
 
         self.gamma = 0.99
@@ -40,10 +54,10 @@ class DQAgent:
         self.lr = lr
 
         if self.model_name == 'GAT_QN':
-            hidden_dim = 4
+            hidden_dim = hidden_dims
 
-            alpha = 0.2  # leakyReLU的alpha
-            nhead = 1
+            alpha = alpha  # leakyReLU的alpha
+            nhead = nheads
 
             self.policy_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
                                     nheads=nhead, mergeZ=True, mergeState=self.merge_z, use_cuda=self.use_cuda, device=self.device)
@@ -126,7 +140,9 @@ class DQAgent:
 
 
     def get_sample(self):
+        self.train_batch_size = (1 + len(self.memory) / self.buffer_max) * self.basic_batch_size
         if len(self.memory) > self.train_batch_size:
+
             batch = random.sample(self.memory, self.train_batch_size)
             # print(f"{self.print_tag} batch is {batch}")
             # print(f" zip is {list(zip(*batch))}")
@@ -176,7 +192,8 @@ class DQAgent:
             losses.append(loss_cur)
         loss = torch.mean(torch.tensor(losses, requires_grad=True))
         # print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
-            # 每 C step，更新目标网络 = 当前的行为网络
+
+        # 每 C step，更新目标网络 = 当前的行为网络
         if i % self.copy_model_steps == 0:
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())        #？？ 是这样用吗
