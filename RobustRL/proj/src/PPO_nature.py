@@ -165,13 +165,13 @@ class GATPolicyNet(GAT):
 
 
 class PPOContinuousAgent:
-    def __init__(self, graph_pool, node_feature_pool, hyper_pool, lr, model_name,
-                 alpha, nheads, hidden_dims,
-                 node_nbr, node_dim, policy_dis, norm_name, observe_state,
-                 gamma, lmbda, eps, epochs, use_cuda, merge_z, device):
+    def __init__(self, graph_pool, node_feature_pool, hyper_pool,
+                 nature_setting,
+                 node_nbr, node_dim,
+                 lmbda, eps, epochs, use_cuda, device):
         self.print_tag = "PPO Agent---"
         self.use_cuda = use_cuda
-        self.merge_z = merge_z
+        self.merge_z = nature_setting["canObserve_hyper"]
         self.device = device
 
         # necessary env info
@@ -180,16 +180,17 @@ class PPOContinuousAgent:
         self.node_features_pool = node_feature_pool
         self.hyper_pool = hyper_pool
 
-        self.actor_lr, self.critic_lr = lr      # [actor_lr, critic_lr]
+        self.actor_lr = nature_setting["actor_lr"]
+        self.critic_lr = nature_setting["critic_lr"]
 
         self.node_features = None
         self.node_features_dims = node_dim
         self.z = None
-        self.observe_state = observe_state
+        self.observe_state = nature_setting["canObserve_state"]
 
-        self.policy_dis = policy_dis        # “Beta” or "Gauss"
-        self.norm_name = norm_name      # norm method when Gaussian distribution, "sigmoid" or "softmax"
-        self.model_name = model_name
+        self.policy_dis = nature_setting["PolicyDisName"]  # “Beta” or "Gauss"
+        self.norm_name = nature_setting["PolicyNormName"]  # norm method when Gaussian distribution, "sigmoid" or "softmax"
+        self.model_name = nature_setting["agent_method"]
 
         self.graph = None
         self.adj = None
@@ -198,16 +199,16 @@ class PPOContinuousAgent:
         # buffer
         self.memory = {'states':[], 'actions':[], 'rewards':[]}
 
-        self.gamma = gamma
+        self.gamma = nature_setting["gamma"]
         self.lmbda = lmbda
         self.eps = eps
         self.epochs = epochs
 
         if self.model_name == 'GAT_PPO':
-            nhid = hidden_dims
+            nhid = nature_setting["hidden_dims"]
 
-            alpha = alpha  # leakyReLU的alpha
-            nhead = nheads
+            alpha = nature_setting["alpha"]  # leakyReLU的alpha
+            nhead = nature_setting["nheads"]
             self.actor = GATPolicyNet(self.node_nbr, self.node_features_dims, nhid, 2 * self.node_features_dims, alpha,
                                       nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
             self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=self.merge_z,
