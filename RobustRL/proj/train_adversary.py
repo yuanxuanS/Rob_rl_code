@@ -19,13 +19,7 @@ import multiprocessing
 from multiprocessing import Manager
 import logging
 
-def setup_logger():
-    # 创建一个logger对象
-    logger = logging.getLogger('my_logger')
-    logger.setLevel(logging.DEBUG)
-
-    # 创建一个格式器，定义日志输出格式，包含时间、进程ID、日志名称、日志级别和消息内容
-    formatter = logging.Formatter('%(asctime)s - %(process)d  - %(name)s - %(levelname)s - %(message)s')
+def setup_logger(path):
 
     # # 创建一个控制台处理器，将日志输出到控制台
     # console_handler = logging.StreamHandler()
@@ -33,15 +27,20 @@ def setup_logger():
     # console_handler.setFormatter(formatter)
     #
     # # 创建一个文件处理器，将日志记录到文件中
-    # file_handler = logging.FileHandler('app.log')
-    # file_handler.setLevel(logging.INFO)
-    # file_handler.setFormatter(formatter)
+    file_handler = logging.FileHandler(path)
+    # 创建一个格式器，定义日志输出格式，包含时间、进程ID、日志名称、日志级别和消息内容
+    formatter = logging.Formatter('%(asctime)s - %(process)d - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
 
-    # 将处理器添加到logger对象
-    # logger.addHandler(console_handler)
-    # logger.addHandler(file_handler)
+    log = logging.getLogger()
+    for hdlr in log.handlers[:]:
+        log.removeHandler(hdlr)
+    log.addHandler(file_handler)
+    log.setLevel(logging.DEBUG)
 
-    return logger
+
+
+    return log
 # sys.stdout = open(os.devnull, 'w')
 
 log_dir_global = "log_3"
@@ -97,23 +96,34 @@ parser.add_argument("--graph-pool-nbr", type=int, default=1)
 parser.add_argument("--train-graph-nbr", type=int, default=1)
 parser.add_argument("--valid-graph-nbr", type=int, default=4)
 parser.add_argument("--nodes", type=int, default=100)
-parser.add_argument("--edge-p", type=float, default=0.5)
-parser.add_argument("--node-feat-dims", type=int, default=3)
-parser.add_argument("--feat-pool-nbr", type=int, default=1)
-parser.add_argument("--z-pool-nbr", type=int, default=1)
-parser.add_argument("--hyper-way", type=str, default="random")      # random or rl_nature, hyperparams generation way
 parser.add_argument("--budget", type=int, default=4)
+
+parser.add_argument("--valid-with-nature", type=bool, default=False)      # random or rl_nature, hyperparams generation way in validation
+parser.add_argument("--edge-p", type=float, default=0.5)
 parser.add_argument("--train-episodes", type=int, default=10)       # total training episodes
 parser.add_argument("--valid-episodes", type=int, default=10)       # episodes in every validation
-parser.add_argument("--valid-every", type=int, default=10)      # valid every train episode
-parser.add_argument("--use-cuda", type=bool, default=False)
+
 parser.add_argument("--with-nature", type=bool, default=False)
-parser.add_argument("--observe-z", type=bool, default=False)
-parser.add_argument("--main-method", type=str, default="rl")
+
 parser.add_argument("--GAT-heads", type=int, default=1)
 parser.add_argument("--hidden-dims", type=int, default=4)
 parser.add_argument("--alpha", type=float, default=0.2)
+
 parser.add_argument("--seed-nbr", type=int, default=3)
+parser.add_argument("--gamma", type=float, default=0.99)
+parser.add_argument("--lr", type=float, default=1e-3)
+
+#
+parser.add_argument("--node-feat-dims", type=int, default=3)
+parser.add_argument("--feat-pool-nbr", type=int, default=1)
+parser.add_argument("--z-pool-nbr", type=int, default=1)
+
+parser.add_argument("--valid-every", type=int, default=10)      # valid every train episode
+parser.add_argument("--use-cuda", type=bool, default=False)
+
+parser.add_argument("--observe-z", type=bool, default=False)
+parser.add_argument("--main-method", type=str, default="rl")
+
 
 args = parser.parse_args()
 
@@ -124,7 +134,6 @@ env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
                "feat_pool_n": args.feat_pool_nbr,  # number of trained features in pool
                "node_feat_dims": args.node_feat_dims,
                "z_pool_n": args.z_pool_nbr,  # number of trained z in pool
-               "hyper_way": args.hyper_way,
                "nodes": args.nodes,  # number of graph nodes
                "edge_p": args.edge_p,
                "budgets": args.budget
@@ -136,17 +145,24 @@ main_setting = {
     "observe_z": args.observe_z,
     "nheads": args.GAT_heads,
     "hidden_dims": args.hidden_dims,
-    "alpha": args.alpha
+    "alpha": args.alpha,
+    "gamma": args.gamma,
+    "lr": args.lr
 }
 
 # nature's settings
 nature_setting = {
     "agent_method": 'GAT_PPO',
+    "PolicyDisName": "Beta",
+    "PolicyNormName": "sigmoid",
     "canObserve_hyper": args.observe_z,
     "canObserve_state": False,
     "nheads": args.GAT_heads,
     "hidden_dims": args.hidden_dims,
-    "alpha": args.alpha
+    "alpha": args.alpha,
+    "gamma": args.gamma,     # = main agent gamma
+    "actor_lr": args.lr,
+    "critic_lr": args.lr
 }
 
 # other training setting
@@ -154,9 +170,12 @@ training_setting = {
     "with_nature": args.with_nature,
     "train_episodes": args.train_episodes,
     "valid_episodes": args.valid_episodes,
-    "hyper_way": args.hyper_way,
     "valid_every": args.valid_every
 
+}
+
+valid_setting = {
+    "with_nature": args.valid_with_nature
 }
 
 # gpu
@@ -175,13 +194,10 @@ node_feat_pool = gener_node_features(env_setting["nodes"], env_setting["node_fea
 z_pool = gener_z(env_setting["node_feat_dims"], env_setting["z_pool_n"])
 propagate_p = 0.7
 
+
 # nature
-actor_lr = 1e-5
-critic_lr = 1e-3
-nature_lr = [actor_lr, critic_lr]
-PolicyDisName = "Beta"
-PolicyNormName = "sigmoid"
-gamma = 0.98
+
+
 lmbda = 0.95
 epochs = 10
 eps = 0.2
@@ -194,20 +210,16 @@ cascade = None
 epsilon = 0.3
 batch_size = 16
 update_target_steps = 5       # copy policy_model -> target model
-main_lr = 1e-3
 
 
 def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
-    logger.info(f"this seed is {this_seed}")
+    logger.info(f"this seed is {this_seed}, pid is {os.getpid()}")
     # initialize
     env = Environment(graph_pool, node_feat_pool, z_pool, env_setting["budgets"])  #
-    nature_agent = PPOContinuousAgent(graph_pool, node_feat_pool, z_pool, nature_lr, nature_setting["agent_method"],
-                                      nature_setting["alpha"], nature_setting["nheads"], nature_setting['hidden_dims'],
+    nature_agent = PPOContinuousAgent(graph_pool, node_feat_pool, z_pool,
+                                      nature_setting,
                                       env_setting["nodes"], env_setting["node_feat_dims"],
-                                      PolicyDisName, PolicyNormName,
-                                      nature_setting["canObserve_state"], gamma,
                                       lmbda, eps, epochs, device_setting["use_cuda"],
-                                      nature_setting["canObserve_hyper"],
                                       device_setting["device"])
 
     if main_setting['agent_method'] == 'rl':
@@ -216,49 +228,43 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
         model_name = 'random'
 
     main_agent = DQAgent(graph_pool, node_feat_pool, z_pool,
-                         main_lr, model_name, main_setting['alpha'], main_setting["nheads"],
-                         env_setting["node_feat_dims"], main_setting["hidden_dims"],
+                        model_name,
+                         main_setting,
+                         env_setting["node_feat_dims"],
                          epsilon, batch_size, update_target_steps,
-                         device_setting["use_cuda"], main_setting['observe_z'], device_setting["device"])
+                         device_setting["use_cuda"],
+                         device_setting["device"])
 
     st = time.time()
 
     # record infor
 
-    def record_infor(env_setting, training_setting, main_setting, device_setting):
+    def record_infor(env_setting, training_setting, valid_setting, main_setting, device_setting):
         logger.info(f"Environment ---")
-        logger.info(f"graph pool :{env_setting['graph_pool_n']}, connect edge: {env_setting['edge_p']}")
-        logger.info(f"feature_pool :{env_setting['feat_pool_n']}, node_feature dimensions :{env_setting['node_feat_dims']}")
-        logger.info(f"hyper_pool : {env_setting['z_pool_n']}")
-        logger.info(f"\tgraph size: {env_setting['nodes']} nodes, {env_setting['budgets']} budgets")
+        for key, value in env_setting.items():
+            logger.info(f" {key} : {value}")
 
         logger.info(f"Main Agent ---")
-        logger.info(f"main agent: {main_setting['agent_method']}")
-        logger.info(f"agent get hyper: {main_setting['observe_z']}")
-        logger.info(f"agent GAT nheads: {main_setting['nheads']}")
-        logger.info(f"agent GAT hidden dims :{main_setting['hidden_dims']}")
-        logger.info(f"agent GAT , alpha: {main_setting['alpha']}")
+        for key, value in main_setting.items():
+            logger.info(f" {key} : {value}")
 
         logger.info(f"Nature Agent ---")
-        logger.info(f"nature agent: {nature_setting['agent_method']}")
-        logger.info(f"nature get hyper: {nature_setting['canObserve_hyper']}")
-        logger.info(f"nature GAT nheads: {nature_setting['nheads']}")
-        logger.info(f"nature GAT hidden dims :{nature_setting['hidden_dims']}")
-        logger.info(f"nature GAT , alpha: {nature_setting['alpha']}")
+        for key, value in nature_setting.items():
+            logger.info(f" {key} : {value}")
 
         logger.info(f"Training --- ")
-        logger.info(f"with nature adversary： {training_setting['with_nature']}")
-        logger.info(f"hyper generation way: by {training_setting['hyper_way']}")
-        logger.info(f"training episodes: {training_setting['train_episodes']}")
-        logger.info(f"validation episodes: {training_setting['valid_episodes']}")
-        logger.info(f"valid every {training_setting['valid_every']} training episodes")
+        for key, value in training_setting.items():
+            logger.info(f" {key} : {value}")
+
+        logger.info(f"Validation --- ")
+        for key, value in valid_setting.items():
+            logger.info(f" {key} : {value}")
 
         logger.info(f"Device ---")
-        logger.info(f"GPU is {device_setting['gpu_flag']} and {torch.cuda.device_count()} gpus")
-        logger.info(f"use cuda: {device_setting['use_cuda']}")
-        logger.info(f"get device {device_setting['device']}")
+        for key, value in device_setting.items():
+            logger.info(f" {key} : {value}")
 
-    record_infor(env_setting, training_setting, main_setting, device_setting)
+    record_infor(env_setting, training_setting, valid_setting, main_setting, device_setting)
 
     # tensorboard
     starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
@@ -271,7 +277,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
 
     # training
     runner = Runner(env, env_setting, main_agent, main_setting, nature_agent,
-                    training_setting, device_setting, writer)
+                    training_setting, valid_setting, device_setting, writer)
     runner.train()
 
     returns = runner.final_valid()  # in all graphs，
@@ -308,7 +314,8 @@ for r in range(env_setting["valid_graph_nbr"]):
 whole_st = time.time()
 
 # 设置全局日志配置
-logger = setup_logger()
+path = "./" + log_dir_global + "/" + args.logdir + "/" + args.logtime + ".log"
+logger = setup_logger(path)
 
 
 processes = []

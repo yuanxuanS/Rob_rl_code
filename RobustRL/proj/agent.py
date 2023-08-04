@@ -17,12 +17,13 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 class DQAgent:
-    def __init__(self, graph_pool, node_feat_pool, hyper_pool, lr, model_name,
-                 alpha, nheads, node_dim, hidden_dims,
-                 init_epsilon, train_batch, update_target_steps, use_cuda, merge_z, device):
+    def __init__(self, graph_pool, node_feat_pool, hyper_pool, model_name,
+                 main_setting,
+                 node_dim,
+                 init_epsilon, train_batch, update_target_steps, use_cuda, device):
 
         self.use_cuda = use_cuda
-        self.merge_z = merge_z
+        self.merge_z = main_setting["observe_z"]
         self.device = device
         self.graphs = graph_pool
         self.node_feat_pool = node_feat_pool
@@ -48,21 +49,21 @@ class DQAgent:
         self.basic_batch_size = train_batch
         self.train_batch_size = train_batch     # 训练网络需要的样本数量
 
-        self.gamma = 0.99
+        self.gamma = main_setting["gamma"]
         self.criterion = torch.nn.MSELoss(reduction='mean')
         self.copy_model_steps = update_target_steps
-        self.lr = lr
+        self.lr = main_setting["lr"]
 
         if self.model_name == 'GAT_QN':
-            hidden_dim = hidden_dims
+            hidden_dim = main_setting["hidden_dims"]
 
-            alpha = alpha  # leakyReLU的alpha
-            nhead = nheads
+            alpha = main_setting["alpha"]  # leakyReLU的alpha
+            nhead = main_setting["nheads"]
 
             self.policy_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=self.merge_z, use_cuda=self.use_cuda, device=self.device)
+                                    nheads=nhead, mergeZ=self.merge_z, mergeState=True, use_cuda=self.use_cuda, device=self.device)
             self.target_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=True, mergeState=self.merge_z, use_cuda=self.use_cuda, device=self.device)
+                                    nheads=nhead, mergeZ=self.merge_z, mergeState=True, use_cuda=self.use_cuda, device=self.device)
             if self.use_cuda:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)
@@ -140,7 +141,7 @@ class DQAgent:
 
 
     def get_sample(self):
-        self.train_batch_size = (1 + len(self.memory) / self.buffer_max) * self.basic_batch_size
+        self.train_batch_size = int((1 + len(self.memory) / self.buffer_max) * self.basic_batch_size)
         if len(self.memory) > self.train_batch_size:
 
             batch = random.sample(self.memory, self.train_batch_size)

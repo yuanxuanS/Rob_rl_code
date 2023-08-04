@@ -8,7 +8,7 @@ logging.basicConfig(level=logging.DEBUG,
 
 class Runner:
     def __init__(self, environment, env_setting, agent, main_setting, nature,
-                 training_setting, device_setting, writer):
+                 training_setting, valid_setting, device_setting, writer):
         self.environment = environment
         self.env_setting = env_setting
         self.agent = agent
@@ -16,6 +16,7 @@ class Runner:
         self.nature = nature
 
         self.training_setting = training_setting
+        self.valid_setting = valid_setting
         self.device_setting = device_setting
         self.writer = writer
 
@@ -54,7 +55,7 @@ class Runner:
                 self.environment.reset()
                 if self.training_setting["with_nature"]:
                     self.nature.reset()
-                    if self.env_setting["hyper_way"] == "rl_nature":
+                    if self.valid_setting["with_nature"]:
                         logging.info("generate hyperparams by nature in valid")
                         nature_state, _ = self.environment.get_seed_state()
                         z_action_pair_lst = self.nature.act(nature_state)
@@ -193,6 +194,6 @@ class Runner:
         average_accumulated_rewards = np.mean(episode_accumulated_rewards, axis=1)      # 5, 1dims
         for r in range(self.env_setting["valid_graph_nbr"]):
             g_id = self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] + r
-            self.writer.add_scalar(f"valid in graph: {g_id}/ env z by: {self.env_setting['hyper_way']}", average_accumulated_rewards[r], self.global_iter)
+            self.writer.add_scalar(f"valid in graph: {g_id}/ with nature: {self.valid_setting['with_nature']}", average_accumulated_rewards[r], self.global_iter)
 
         return average_accumulated_rewards
