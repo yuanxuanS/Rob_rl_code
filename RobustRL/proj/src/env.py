@@ -1,7 +1,13 @@
 import numpy as np
 import torch
+import networkx as nx
+import time
+import matplotlib.pyplot as plt
+
 
 from IC import runIC_repeat
+
+
 class Environment(object):
 
     def __init__(self, graph_pool, node_feat_pool, z_pool, budget):
@@ -13,7 +19,8 @@ class Environment(object):
         self.G = None
         self.node_features = None
         self.z = None
-        self.propagate_p_matrix = None
+        self.path = None
+        # self.propagate_p_matrix = None
         ## 超参模型
 
         self.edge_features = []     # 通过 generate_edge_feature 拼接生成
@@ -36,7 +43,7 @@ class Environment(object):
         self.adj_matrix = self.G.adj_matrix  # 邻接矩阵，n,n
 
         ## 图上的传播
-        self.propagate_p_matrix = np.zeros([self.N, self.N])  # 边上的传播概率
+        # self.propagate_p_matrix = np.zeros([self.N, self.N])  # 边上的传播概率
 
     def init_n_feat(self, ft_id):
         '''
@@ -50,7 +57,8 @@ class Environment(object):
     def init_hyper(self, hyper_id):
         self.z = self.z_pool[hyper_id]
         # 通过超参z初始化传播概率矩阵
-        self.propagate_p_matrix = self.hyper_model()
+        # self.propagate_p_matrix = self.hyper_model()
+        self.hyper_model()
 
 
     def reset(self):
@@ -120,7 +128,9 @@ class Environment(object):
 
 
     def run_cascade(self, seeds):
-        reward, _ = runIC_repeat(self.g, seeds, p=self.propagate_p_matrix)
+        # reward, _ = runIC_repeat(self.g, seeds, p=self.propagate_p_matrix)
+        reward, _ = runIC_repeat(self.g, seeds, p=None)
+
         return reward
 
     def generate_node_feature(self):
@@ -161,14 +171,40 @@ class Environment(object):
             # print(edge_features)
         return self.edge_features
 
+    def draw_graph(self):
+        print("draw graph! ")
+        elarge = [(u, v) for (u, v, d) in self.g.edges(data=True) if d["weight"] > 0.5]
+        esmall = [(u, v) for (u, v, d) in self.g.edges(data=True) if d["weight"] <= 0.5]
+        pos = nx.spring_layout(self.g, seed=7)  # positions for all nodes - seed for reproducibility
 
+        # nodes
+        nx.draw_networkx_nodes(self.g, pos, node_size=300)
+
+        # edges
+        nx.draw_networkx_edges(self.g, pos, edgelist=elarge, width=3)
+        nx.draw_networkx_edges(
+            self.g, pos, edgelist=esmall, width=3, alpha=0.5, edge_color="b", style="dashed"
+        )
+
+        # node labels
+        nx.draw_networkx_labels(self.g, pos, font_size=10, font_family="sans-serif")
+        # edge weight labels
+        edge_labels = nx.get_edge_attributes(self.g, "weight")
+        nx.draw_networkx_edge_labels(self.g, pos, edge_labels)
+
+        ax = plt.gca()
+        ax.margins(0.08)
+        plt.axis("off")
+        plt.tight_layout()
+        curr_time = time.strftime("%Y-%m-%d_%H:%M:%S")
+        plt.savefig(self.path + "_"+ curr_time[:19])
 
     def hyper_model(self):
         '''
-        产生传播概率
+        产生传播概率, 初始化graph 的edge weight
         :param edge_features:
         :param z:   [1, ]
-        :return: self.propagate_p_matrix, n*n array
+        # :return: self.propagate_p_matrix, n*n array
         '''
         self.edge_features = self.generate_edge_features()
         multi = self.edge_features * self.z
@@ -178,9 +214,12 @@ class Environment(object):
         # 构造权重矩阵
         idx = 0
         for start_node, end_node in self.G.edges:  # 每个节点的邻节点
-            self.propagate_p_matrix[start_node, end_node] = propagate_p_list[idx]
+            # self.propagate_p_matrix[start_node, end_node] = propagate_p_list[idx]
+            self.g.add_edge(start_node, end_node, weight=propagate_p_list[idx])
             idx += 1
 
         # print(self.propagate_p_matrix)
         print(f"{self.print_tag} propagate probability initialized done!")
-        return self.propagate_p_matrix
+
+        self.draw_graph()
+        # return self.propagate_p_matrix

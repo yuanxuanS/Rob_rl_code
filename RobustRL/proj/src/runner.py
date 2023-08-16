@@ -114,11 +114,17 @@ class Runner:
 
             #
             self.environment.reset()
+            logging.debug(f"Now reset env, state is \n {self.environment.state}")
             if self.training_setting["with_nature"]:
+                logging.debug(f"current train with nature")
                 self.nature.reset()
                 nature_state, _ = self.environment.get_seed_state()
+                logging.debug(f"seed state is, and send it to adversary: \n {nature_state}")
                 z_action_pair_lst = self.nature.act(nature_state)
+                logging.debug(f"adversary return: \n {z_action_pair_lst}")
+                logging.debug(f"before adversary do, env hyperparameter is \n {self.environment.z}")
                 z_new = self.environment.step_hyper(z_action_pair_lst)
+                logging.debug(f"updating env hyperparameter, current hyperparam is \n {self.environment.z}")
 
             # main agent
             self.agent.reset()
@@ -126,16 +132,18 @@ class Runner:
 
             sub_reward = []
             sub_loss = 0
+            logging.debug(f"before main agent act")
             for i in range(self.environment.budget):
-                # print(f"---------- sub step {i}")
+                logging.debug(f"---------- sub step {i}")
                 state, feasible_action = self.environment.get_seed_state()  # [1, N]
                 action = self.agent.act(state, feasible_action, "train")
-                logging.info(f"main agent action is {action} ")
+                logging.debug(f"main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
                 next_state, reward, done = self.environment.step_seed(i, action)
-                logging.info(f"get reward is {reward}")
+                logging.debug(f"get reward is {reward}")
 
                 # add to buffer
                 if self.main_setting["agent_method"] == 'rl':
+                    logging.debug(f"main agent method is reinforcement learning")
                     sample = [state, action, reward, next_state, done, g_id, ft_id, hyper_id]
                     self.agent.remember(sample)
                 elif self.main_setting["agent_method"] == 'random':
@@ -146,12 +154,14 @@ class Runner:
 
                 # get sample and update the main model, GAT
                 if self.main_setting["agent_method"] == "rl":
+                    logging.debug(f"now update the main agent")
                     loss = self.agent.update(i)
+                    logging.debug(f"after main agent update, get loss :{loss}")
                     self.main_loss.append(loss)
                     sub_loss += loss
                 elif self.main_setting["agent_method"] == "random":
                     pass
-                # print(f"loss is {loss}")
+            logging.debug(f"after budget selection, main agent's return is {cumul_reward}, overall loss is {sub_loss}")
 
 
 
@@ -166,7 +176,7 @@ class Runner:
                 self.nature.remember(nature_state, z_action_pair_lst, -cumul_reward)
                 # get a trajectory and update the nature model
                 act_loss_nature, cri_loss_nature = self.nature.update()
-            # print(f"actor loss {act_loss_nature} critic loss {cri_loss_nature}")
+                logging.debug(f"adversary, actor loss {act_loss_nature} critic loss {cri_loss_nature}")
             # self.nature_critic_loss.append(cri_loss_nature.item())
             # self.nature_actor_loss.append(act_loss_nature.item())
 

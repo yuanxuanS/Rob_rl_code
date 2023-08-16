@@ -19,6 +19,8 @@ import multiprocessing
 from multiprocessing import Manager
 import logging
 
+
+log_dir_global = "log_test"
 def setup_logger(path):
     # # 创建一个控制台处理器，将日志输出到控制台
     # console_handler = logging.StreamHandler()
@@ -40,7 +42,6 @@ def setup_logger(path):
     return log
 # sys.stdout = open(os.devnull, 'w')
 
-log_dir_global = "log_3"
 def load_graph(graph_nbr_train, node_nbr, node_edge_p, logdir, logtime):
     graph_dic = {}
     for graph_ in range(graph_nbr_train):
@@ -267,8 +268,10 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
               str(env_setting["nodes"]) + " nodes -" \
               + str(env_setting["budgets"]) + " budgets -" \
               + str(this_seed) + " seed "
-    writer = SummaryWriter("../" + log_dir_global + "/" + args.logdir + "/" + img_str)
+    writer = SummaryWriter("../pscr/" + log_dir_global + "/" + args.logdir + "/" + img_str)
 
+    # graph save dir
+    env.path = "../pscr/" + log_dir_global + "/" + args.logdir + "/graphs/" + img_str + "_graph"
     # training
     runner = Runner(env, env_setting, main_agent, main_setting, nature_agent,
                     training_setting, valid_setting, device_setting, writer)
@@ -316,10 +319,10 @@ for i in range(args.seed_nbr):
     seed.gener_seed()
 
     this_seed = seed.get_value()
-    logging.info(f"seed is {this_seed}")
+    print(f"seed is {this_seed}")
 
     # 设置全局日志配置
-    path = "../" + log_dir_global + "/" + args.logdir + "/" + args.logtime + "_seed_" + str(this_seed) + ".log"
+    path = "../pscr/" + log_dir_global + "/" + args.logdir + "/" + args.logtime + "_seed_" + str(this_seed) + ".log"
     logger = setup_logger(path)
 
     p = multiprocessing.Process(target=run_one_seed,
@@ -333,11 +336,11 @@ for p in processes:
 
 
 
-logging.info(f"whole seed dict:\n {seed_record_per_g}")
+print(f"whole seed dict:\n {seed_record_per_g}")
 
 starttime = time.strftime("%Y-%m-%d_%H:%M:%S")
-logging.info(f"plot reward-percentile time is {starttime[:19]}")
-writer2 = SummaryWriter("../" + log_dir_global + "/" + args.logdir + "/reward-percentile/" + starttime[:19])
+print(f"plot reward-percentile time is {starttime[:19]}")
+writer2 = SummaryWriter("../pscr/" + log_dir_global + "/" + args.logdir + "/reward-percentile/" + starttime[:19])
 
 for r in range(env_setting["valid_graph_nbr"]):
     multi_seed_g = seed_record_per_g[r]
@@ -363,7 +366,5 @@ for r in range(env_setting["valid_graph_nbr"]):
 
 
 writer2.close()
-logging.info(f"whole run time: {time.time() - whole_st}")
+print(f"whole run time: {time.time() - whole_st}")
 
-# 结束日志处理器
-logging.shutdown()

@@ -8,7 +8,7 @@ import networkx as nx
 import pandas as pd
 print_tag = "IC---"
 
-def runIC(G, S, p=0.1):
+def runIC(G, S, p=None):
     ''' Runs independent cascade model.
     Input: G -- networkx graph object
     S -- initial list of vertices
@@ -22,17 +22,22 @@ def runIC(G, S, p=0.1):
         # print(f"{print_tag} G  is {G}")
         for v in G[u]:  # for loop over all neighbors of each seed vertex
             w = 1      # activation probability of edge based on network edge weight
-            if isinstance(p, float):    # if propagation probability is constant
-                prob = 1 - (1-p)**w # calculate activation probability of edge
-            else:  # if propagation probability varies among edges
-                p_one_edge = p[u, v]
-                # print(f'this proba is {p_one_edge}')
-                prob = 1 - (1-p_one_edge)**w
+            if p:
+                if isinstance(p, float):    # if propagation probability is constant
+                    prob = 1 - (1-p)**w # calculate activation probability of edge
+                else:  # if propagation probability varies among edges
+                    p_one_edge = p[u, v]
+                    # print(f'this proba is {p_one_edge}')
+                    prob = 1 - (1-p_one_edge)**w
+            else:
+                # p = None, weight added in graph
+                prob = G[u][v]["weight"]
+
             if v not in T and random.random() < prob:
                 T.append(v)
     return T
 
-def runIC_repeat(G, S, p=0.01, sample=100):
+def runIC_repeat(G, S, p=None, sample=100):
     infl_list = []
 
     # with no seeds
