@@ -169,6 +169,7 @@ class PPOContinuousAgent:
                  nature_setting,
                  node_nbr, node_dim,
                  lmbda, eps, epochs, use_cuda, device):
+
         self.print_tag = "PPO Agent---"
         self.use_cuda = use_cuda
         self.merge_z = nature_setting["canObserve_hyper"]
@@ -188,8 +189,8 @@ class PPOContinuousAgent:
         self.z = None
         self.observe_state = nature_setting["canObserve_state"]
 
-        self.policy_dis = nature_setting["PolicyDisName"]  # “Beta” or "Gauss"
-        self.norm_name = nature_setting["PolicyNormName"]  # norm method when Gaussian distribution, "sigmoid" or "softmax"
+        self.policy_dis = nature_setting["PolicyDisName"]        # “Beta” or "Gauss"
+        self.norm_name = nature_setting["PolicyNormName"]      # norm method when Gaussian distribution, "sigmoid" or "softmax"
         self.model_name = nature_setting["agent_method"]
 
         self.graph = None
