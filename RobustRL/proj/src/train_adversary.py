@@ -64,14 +64,14 @@ def load_graph(graph_nbr_train, node_nbr, node_edge_p, logdir, logtime):
     # print('train graphs in total: ', len(graph_dic))
     return graph_dic
 
-def gener_node_features(node_nbr, node_dim, feat_nbr):
+def gener_node_features(node_nbr, node_dim, feat_nbr, normal_mean):
     n_feat_dic = {}
     for f in range(feat_nbr):
         seed = f
         np.random.seed(seed)
-        tmp = np.random.normal(loc=0.5, scale=3, size=(node_nbr, node_dim))
+        tmp = np.random.normal(loc=normal_mean, scale=3, size=(node_nbr, node_dim))
 
-        n_feat_dic[f] = np.clip(tmp, a_min=0, a_max=1)  # 0-1
+        n_feat_dic[f] = np.clip(tmp, a_min=0, a_max=normal_mean+0.1)  # 0-1
     return n_feat_dic
 
 def gener_z(node_dim, z_nbr):
@@ -130,6 +130,7 @@ env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
                "valid_graph_nbr": args.valid_graph_nbr,  # number of validation graphs in pool
                "feat_pool_n": args.feat_pool_nbr,  # number of trained features in pool
                "node_feat_dims": args.node_feat_dims,
+               "node_feat_normal_mean": 0.1,
                "z_pool_n": args.z_pool_nbr,  # number of trained z in pool
                "nodes": args.nodes,  # number of graph nodes
                "edge_p": args.edge_p,
@@ -187,7 +188,7 @@ device_setting = {
 
 
 graph_pool = load_graph(env_setting["graph_pool_n"], env_setting["nodes"], env_setting["edge_p"], args.logdir, args.logtime)
-node_feat_pool = gener_node_features(env_setting["nodes"], env_setting["node_feat_dims"], env_setting["feat_pool_n"])
+node_feat_pool = gener_node_features(env_setting["nodes"], env_setting["node_feat_dims"], env_setting["feat_pool_n"], env_setting["node_feat_normal_mean"])
 z_pool = gener_z(env_setting["node_feat_dims"], env_setting["z_pool_n"])
 propagate_p = 0.7
 

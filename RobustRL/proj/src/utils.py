@@ -15,10 +15,10 @@ def compute_advantage(gamma, lmbda, td_delta):
 # t = torch.tensor([[3.2836]])
 # compute_advantage(0.9, 0.9, t)
 
-def draw_distri_hist(data_lst, sav_path):
+def draw_distri_hist(data_lst, sav_path, name):
     print("--- return histogram ---")
     print(f"max is {max(data_lst)}, min is {min(data_lst)}")
     plt.hist(data_lst)
-    plt.title(f"return histogram")
-    curr_time = time.strftime("%Y-%m-%d_%H:%M:%S")
-    plt.savefig(sav_path + "_" + curr_time[:19])
+    plt.title(f"histogram of {name}")
+    plt.savefig(sav_path + "_" + name)
+    plt.close()

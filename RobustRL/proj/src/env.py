@@ -3,6 +3,7 @@ import torch
 import networkx as nx
 import time
 import matplotlib.pyplot as plt
+from utils import draw_distri_hist
 
 
 from IC import runIC_repeat
@@ -133,21 +134,6 @@ class Environment(object):
 
         return reward
 
-    def generate_node_feature(self):
-        # 返回n个节点特征，特征维度为d
-        # 返回 n*d np.array
-        '''
-
-        :param node_feat_dimension:
-        :return: node_features, numpy array, 2 dimens, n * node_feat_dimension
-        '''
-
-        # node_features = np.zeros((n, node_feat_dimension))
-        node_features = np.random.rand(self.N, self.node_feat_dimension)  # 0-1
-        # print(f"{self.print_tag} node feature initialized done!")
-        # print(self.node_features)
-        return node_features
-
     def generate_edge_features(self):
         '''
 
@@ -198,8 +184,8 @@ class Environment(object):
         ax.margins()
         plt.axis("off")
         plt.tight_layout()
-        curr_time = time.strftime("%Y-%m-%d_%H:%M:%S")
-        plt.savefig(self.path + "_"+ curr_time[:19])
+        plt.savefig(self.path + "_graph network")
+        plt.close()
 
     def hyper_model(self):
         '''
@@ -212,7 +198,7 @@ class Environment(object):
         multi = self.edge_features * self.z
         propagate_p_list = multi.mean(axis=1)      # 0-1
 
-
+        draw_distri_hist(propagate_p_list, self.path, "propagate_prob")
         # 构造权重矩阵
         idx = 0
         for start_node, end_node in self.G.edges:  # 每个节点的邻节点

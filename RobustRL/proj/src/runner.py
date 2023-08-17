@@ -199,7 +199,7 @@ class Runner:
                 self.writer.add_scalar(f'nature/GPU={self.device_setting["use_cuda"]}/critic loss ', cri_loss_nature.item(),
                                   self.global_iter)
 
-        utils.draw_distri_hist(self.cumu_reward, self.path)
+        utils.draw_distri_hist(self.cumu_reward, self.path, "cumu_reward")
 
     def final_valid(self):
         # validation at the end
