@@ -32,6 +32,7 @@ def runIC(G, S, p=None):
             else:
                 # p = None, weight added in graph
                 prob = G[u][v]["weight"]
+                print(f"prob of nodes u:{u} and v:{v} is {prob}")
 
             if v not in T and random.random() < prob:
                 T.append(v)
@@ -48,6 +49,7 @@ def runIC_repeat(G, S, p=None, sample=100):
         T = runIC(G, S, p=p)
         influence = len(T)      # 最后的影响力值为激活的node总数，包括seeds中的
         infl_list.append(influence)
+    print(f"influence list is {infl_list}")
     infl_mean = np.mean(infl_list)
     infl_std = np.std(infl_list)
 

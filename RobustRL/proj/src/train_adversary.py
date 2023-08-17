@@ -30,7 +30,7 @@ def setup_logger(path):
     # # 创建一个文件处理器，将日志记录到文件中
     file_handler = logging.FileHandler(path)
     # 创建一个格式器，定义日志输出格式，包含时间、进程ID、日志名称、日志级别和消息内容
-    formatter = logging.Formatter('%(asctime)s - %(process)d - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(process)d - %(levelname)s - %(filename)s - %(funcName)s - %(message)s')
     file_handler.setFormatter(formatter)
 
     log = logging.getLogger()
@@ -97,7 +97,7 @@ parser.add_argument("--nodes", type=int, default=100)
 parser.add_argument("--budget", type=int, default=4)
 
 parser.add_argument("--valid-with-nature", type=bool, default=False)      # random or rl_nature, hyperparams generation way in validation
-parser.add_argument("--edge-p", type=float, default=0.5)
+parser.add_argument("--edge-p", type=float, default=0.1)
 parser.add_argument("--train-episodes", type=int, default=10)       # total training episodes
 parser.add_argument("--valid-episodes", type=int, default=10)       # episodes in every validation
 
@@ -275,6 +275,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
     # training
     runner = Runner(env, env_setting, main_agent, main_setting, nature_agent,
                     training_setting, valid_setting, device_setting, writer)
+    runner.path = "../pscr/" + log_dir_global + "/" + args.logdir + "/graphs/" + img_str + "_return_hist"
     runner.train()
 
     returns = runner.final_valid()  # in all graphs，

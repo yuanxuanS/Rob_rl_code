@@ -1,5 +1,6 @@
 import random
 import numpy as np
+import utils
 import logging
 logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-10s) %(message)s',
@@ -19,7 +20,10 @@ class Runner:
         self.valid_setting = valid_setting
         self.device_setting = device_setting
         self.writer = writer
+        self.path = None
 
+        # statistic
+        self.cumu_reward = []
 
         self.nature_critic_loss = []
         self.nature_actor_loss = []
@@ -140,11 +144,12 @@ class Runner:
                 logging.debug(f"main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
                 next_state, reward, done = self.environment.step_seed(i, action)
                 logging.debug(f"get reward is {reward}")
+                feasible_action.remove(action)
 
                 # add to buffer
                 if self.main_setting["agent_method"] == 'rl':
                     logging.debug(f"main agent method is reinforcement learning")
-                    sample = [state, action, reward, next_state, done, g_id, ft_id, hyper_id]
+                    sample = [state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id]
                     self.agent.remember(sample)
                 elif self.main_setting["agent_method"] == 'random':
                     pass
@@ -162,7 +167,7 @@ class Runner:
                 elif self.main_setting["agent_method"] == "random":
                     pass
             logging.debug(f"after budget selection, main agent's return is {cumul_reward}, overall loss is {sub_loss}")
-
+            self.cumu_reward.append(cumul_reward)
 
 
             # print(f"cumulative reward is {cumul_reward}")
@@ -194,6 +199,7 @@ class Runner:
                 self.writer.add_scalar(f'nature/GPU={self.device_setting["use_cuda"]}/critic loss ', cri_loss_nature.item(),
                                   self.global_iter)
 
+        utils.draw_distri_hist(self.cumu_reward, self.path)
 
     def final_valid(self):
         # validation at the end

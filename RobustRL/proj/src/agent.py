@@ -152,6 +152,7 @@ class DQAgent:
             action_batch = list(list(zip(*batch))[1])
             reward_batch = list(list(zip(*batch))[2])
             next_state_batch = list(list(zip(*batch))[3])
+            feasible_batch = list(list(zip(*batch))[4])
         else:
             batch = []
         return batch
@@ -167,15 +168,20 @@ class DQAgent:
 
         losses = []
         for transition in batch:
-            state, action, reward, next_state, done, g_id, ft_id, hyper_id = transition
+            state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
             # 用目标网络计算目标值y
             graph = self.graphs[g_id]
             adj = torch.Tensor(graph.adj_matrix)
             node_feature = torch.Tensor(self.node_feat_pool[ft_id])
             hyper = torch.Tensor(self.hyper_pool[hyper_id])
-            target = reward + (1 - done) * self.gamma * self.target_model(node_feature.to(self.device), adj.to(self.device),
-                                                                          torch.Tensor(next_state).to(self.device), z=hyper.to(self.device)).max()
+            q_without_mask = self.target_model(node_feature.to(self.device), adj.to(self.device),
+                                                torch.Tensor(next_state).to(self.device), z=hyper.to(self.device))
+            infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
+            # print(f"{self.print_tag} infeasible action is {infeasible_action}")
 
+            q_without_mask[infeasible_action] = -9e15
+
+            target = reward + (1 - done) * self.gamma * q_without_mask.max()
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
             # print(f"{self.print_tag} calculated target q is {target}")

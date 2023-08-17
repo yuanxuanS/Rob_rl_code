@@ -178,7 +178,7 @@ class Environment(object):
         pos = nx.spring_layout(self.g, seed=7)  # positions for all nodes - seed for reproducibility
 
         # nodes
-        nx.draw_networkx_nodes(self.g, pos, node_size=300)
+        nx.draw_networkx_nodes(self.g, pos, node_size=80)
 
         # edges
         nx.draw_networkx_edges(self.g, pos, edgelist=elarge, width=3)
@@ -187,13 +187,15 @@ class Environment(object):
         )
 
         # node labels
-        nx.draw_networkx_labels(self.g, pos, font_size=10, font_family="sans-serif")
+        nx.draw_networkx_labels(self.g, pos, font_size=5, font_family="sans-serif")
         # edge weight labels
-        edge_labels = nx.get_edge_attributes(self.g, "weight")
-        nx.draw_networkx_edge_labels(self.g, pos, edge_labels)
+        # edge_labels = nx.get_edge_attributes(self.g, "weight")
+        edge_labels = dict([((u, v,), f"{d['weight']:.2f}") for u, v, d in self.g.edges(data=True)])
+        nx.draw_networkx_edge_labels(self.g, pos, edge_labels, font_size=3)
 
+        plt.figure(1, figsize=(800, 800), dpi=100)
         ax = plt.gca()
-        ax.margins(0.08)
+        ax.margins()
         plt.axis("off")
         plt.tight_layout()
         curr_time = time.strftime("%Y-%m-%d_%H:%M:%S")
@@ -221,5 +223,7 @@ class Environment(object):
         # print(self.propagate_p_matrix)
         print(f"{self.print_tag} propagate probability initialized done!")
 
+        print(f"initial graph weighted")
+        self.G.gener_node_degree_lst()
         self.draw_graph()
         # return self.propagate_p_matrix

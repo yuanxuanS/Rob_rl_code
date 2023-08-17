@@ -16,7 +16,7 @@ valid_with_nature=False   # valid with nature?
 valid_episodes=20
 
 glb_logfile="log_test"
-logdir="8_14"
+logdir="8_17"
 main_method="rl"    # rl
 with_nature=False
 

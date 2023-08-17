@@ -1,14 +1,6 @@
 import networkx as nx
 import logging
-# class Graph:
-#     def __init__(self):
 
-# 生成图的方法
-# g = nx.erdos_renyi_graph(n=3, p=0.5)
-#
-# print(list(g.nodes))
-# print(list(g.edges))
-# print(nx.adjacency_matrix(g))   # (i, j) weight
 
 
 class Graph_IM:
@@ -19,7 +11,8 @@ class Graph_IM:
 
         self.node_degree_lst = None
         self.sorted_ndegree_lst = None
-        self.gener_node_degree_lst()
+        logging.info(f"initialize graph class")
+        # self.gener_node_degree_lst()
         
 
     def gener_node_degree_lst(self):
