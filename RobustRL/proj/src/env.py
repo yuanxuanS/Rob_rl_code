@@ -3,6 +3,7 @@ import torch
 import networkx as nx
 import time
 import matplotlib.pyplot as plt
+import logging
 from utils import draw_distri_hist
 
 
@@ -99,12 +100,15 @@ class Environment(object):
         seeds_set = [v for v in range(self.N) if self.state[0][v]==1]
         # print("seeds is {}".format(seeds))
         # 蒙特卡洛得到influence reward
-        influence_without = self.run_cascade(seeds=seeds_set)
+        influence_without, std_without = self.run_cascade(seeds=seeds_set)
+        logging.debug(f"simulation: seed set- {seeds_set}, mean is {influence_without}, std is {std_without}")
         seeds_set.append(main_action)       ################# main_action 是tensor
-        influence_with = self.run_cascade(seeds=seeds_set)
+        influence_with, std_with = self.run_cascade(seeds=seeds_set)
+        logging.debug(f"simulation: seed set- {seeds_set}, mean is {influence_with}, std is {std_with}")
+
         self.reward = (influence_with - influence_without)
         # 归一化，×100%
-        # self.reward = self.reward / self.N * 100
+        self.reward = self.reward / self.N
 
 
     # update next_state and done
@@ -130,9 +134,9 @@ class Environment(object):
 
     def run_cascade(self, seeds):
         # reward, _ = runIC_repeat(self.g, seeds, p=self.propagate_p_matrix)
-        reward, _ = runIC_repeat(self.g, seeds, p=None)
+        reward, std = runIC_repeat(self.g, seeds, p=None)
 
-        return reward
+        return reward, std
 
     def generate_edge_features(self):
         '''
@@ -140,7 +144,7 @@ class Environment(object):
         :param node_features: numpy array, 2 dimen
         :return: edge_features, nested list, edge_number * (2*d) [[], [], ...]
         '''
-
+        self.edge_features = []
         def gen_edge_fea(u, v):
             # print(node_features[u])   # 索引后为一维
             cat_fea = np.concatenate((self.node_features[u], self.node_features[v]))        #
@@ -195,9 +199,13 @@ class Environment(object):
         # :return: self.propagate_p_matrix, n*n array
         '''
         self.edge_features = self.generate_edge_features()
+        print(f"edge feature is\n {self.edge_features}")
+        print(f"hyper param is\n {self.z}")
         multi = self.edge_features * self.z
-        propagate_p_list = multi.mean(axis=1)      # 0-1
-
+        print(f"after multi is\n {multi}")
+        propagate_p_list = multi.mean(axis=1)      #
+        print(f"propa p is \n {propagate_p_list}")
+        print(f"edge number is {len(propagate_p_list)}")
         draw_distri_hist(propagate_p_list, self.path, "propagate_prob")
         # 构造权重矩阵
         idx = 0

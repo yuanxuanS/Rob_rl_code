@@ -4,8 +4,9 @@ import numpy as np
 import random
 import copy
 import seed
-
-
+import logging
+from graphviz import Digraph
+from torchviz import make_dot, make_dot_from_trace
 seed = seed.get_value()
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
@@ -50,9 +51,11 @@ class DQAgent:
         self.train_batch_size = train_batch     # 训练网络需要的样本数量
 
         self.gamma = main_setting["gamma"]
-        self.criterion = torch.nn.MSELoss(reduction='mean')
+        self.criterion = torch.nn.MSELoss(reduction='none')
         self.copy_model_steps = update_target_steps
         self.lr = main_setting["lr"]
+
+        self.path = None
 
         if self.model_name == 'GAT_QN':
             hidden_dim = main_setting["hidden_dims"]
@@ -67,8 +70,7 @@ class DQAgent:
             if self.use_cuda:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)
-            with torch.no_grad():
-                self.target_model.load_state_dict(self.policy_model.state_dict())
+
 
             self.optimizer = torch.optim.Adam(self.policy_model.parameters(), lr=self.lr)
             
@@ -100,6 +102,21 @@ class DQAgent:
         self.iter_step = 1
         # print(f"{self.print_tag} agent reset done!")
 
+    def forward_hook(self, module, input, output):
+        logging.debug('forward')
+        logging.debug(output.shape)
+        # logging.debug(output[0][0][0])
+
+    def backward_hook(self, module, grad_in, grad_out):
+        logging.debug('backward')
+        logging.debug(grad_in.shape)
+        logging.debug(grad_in)
+        logging.debug(grad_out.shape)
+        logging.debug(grad_out)
+
+    def hook(self, grad):
+        logging.debug("tensor grad:", grad)
+
     def act(self, observation, feasible_action, mode):
         # policy
         if self.model_name == 'GAT_QN':
@@ -112,6 +129,8 @@ class DQAgent:
                 # node_features 融合state
                 # print(f"{self.print_tag} adj_matrix is {self.graph.adj_matrix}")
                 input_node_feat = copy.deepcopy(self.node_features)
+
+
                 q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
                                         torch.Tensor(observation).to(self.device), z=self.z.to(self.device))
                 if self.use_cuda:
@@ -120,7 +139,12 @@ class DQAgent:
                 # print(f"{self.print_tag} infeasible action is {infeasible_action}")
 
                 q_a[infeasible_action] = -9e15
-                # print(f"{self.print_tag} final q_a is {q_a}")
+
+                logging.debug(f"get model params")
+                for name, param in self.policy_model.named_parameters():
+                    logging.debug(f"this layer: {name}, params: {param}")
+
+                logging.debug(f"act, final q_a is {q_a}")
                 action = q_a.argmax()
 
         elif self.model_name == "random":
@@ -142,6 +166,7 @@ class DQAgent:
 
     def get_sample(self):
         self.train_batch_size = int((1 + len(self.memory) / self.buffer_max) * self.basic_batch_size)
+
         if len(self.memory) > self.train_batch_size:
 
             batch = random.sample(self.memory, self.train_batch_size)
@@ -165,8 +190,16 @@ class DQAgent:
         if not batch:
             # print(f"{self.print_tag} no enough sample and no update")
             return 0.
+        else:
+            logging.debug(f"batch length is {len(batch)}")
+        # check gradients
+        self.hs = []
+        # for name, module in self.policy_model.named_children():
+        #     logging.debug(f"add hook")
+        #     h = module.register_backward_hook(self.backward_hook)
+        #     self.hs.append(h)
 
-        losses = []
+        losses = torch.tensor(0.)
         for transition in batch:
             state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
             # 用目标网络计算目标值y
@@ -188,31 +221,73 @@ class DQAgent:
             # 用行为网络计算当前值q
             q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
                                     torch.Tensor(state).to(self.device), z=hyper.to(self.device))
-            
+
+            # g_b = make_dot(q_a)
+            # g_b.render(
+            #     filename="all q value",
+            #     directory=self.path + "/logdir",
+            #     format="png"
+            # )
             
             q = q_a[action]
-            # print(f"{self.print_tag} calculated action q is {q}")
-            # y和q计算loss，更新行为网络
-            # print(f"q type {q.device}| target {target.device} ")
-            loss_cur = self.criterion(q, target)
+            # h = q.register_hook(self.hook)
+            # self.hs.append(h)
 
-            losses.append(loss_cur)
-        loss = torch.mean(torch.tensor(losses, requires_grad=True))
+
+            # g_a = make_dot(q)
+            # g_a.render(
+            #     filename="action selected",
+            #     directory=self.path + "/logdir",
+            #     format="png"
+            # )
+
+            # logging.debug(f" q , requires_grad {q.requires_grad},")
+            # logging.debug(f" target , requires_grad {target.requires_grad}")
+
+            losses  = losses + self.criterion(q, target)
+        losses_a = make_dot(losses)
+        losses_a.render(
+            filename="losses",
+            directory=self.path + "/logdir",
+            format="png"
+        )
+        logging.debug(f"losses is {losses}")
+        # loss = torch.mean(torch.tensor(losses, requires_grad=True))
+        loss = losses / len(batch)
+        loss_a = make_dot(loss)
+        loss_a.render(
+            filename="loss",
+            directory=self.path + "/logdir",
+            format="png"
+        )
+        # h = loss.register_hook(self.hook)
+        # self.hs.append(h)
+        # logging.debug(f" loss , requires_grad {loss.requires_grad}, grad {loss.grad}")
         # print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
 
-        # 每 C step，更新目标网络 = 当前的行为网络
-        if i % self.copy_model_steps == 0:
-            with torch.no_grad():
-                self.target_model.load_state_dict(self.policy_model.state_dict())        #？？ 是这样用吗
+
 
 
         # 梯度更新
         self.loss = loss
         self.optimizer.zero_grad()
+        # logging.debug(f"before backward")
+        # for name, param in self.policy_model.named_parameters():
+        #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+
         loss.backward()
+        logging.debug(f"after backward, loss grad {loss.grad}")
+        # for name, param in self.policy_model.named_parameters():
+        #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
         self.optimizer.step()
 
+        for h in self.hs:
+            h.remove()
 
+        # 每 C step，更新目标网络 = 当前的行为网络
+        if i % self.copy_model_steps == 0:
+            with torch.no_grad():
+                self.target_model.load_state_dict(self.policy_model.state_dict())  # ？？ 是这样用吗
         return self.loss
 
 

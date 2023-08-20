@@ -3,10 +3,9 @@ from copy import deepcopy
 import random
 import numpy as np
 import networkx as nx
-# from src.agent.baseline import *
+import logging
 
 import pandas as pd
-print_tag = "IC---"
 
 def runIC(G, S, p=None):
     ''' Runs independent cascade model.
@@ -19,7 +18,7 @@ def runIC(G, S, p=None):
     T = deepcopy(S)
     # print(f"{print_tag} T is {T} its type is {type(T)}")
     for u in T:     # for loop over all seed vertices in T
-        # print(f"{print_tag} G  is {G}")
+        # logging.debug(f"seed {u}'s neighbor is {G[u]}")
         for v in G[u]:  # for loop over all neighbors of each seed vertex
             w = 1      # activation probability of edge based on network edge weight
             if p:
@@ -49,7 +48,7 @@ def runIC_repeat(G, S, p=None, sample=100):
         T = runIC(G, S, p=p)
         influence = len(T) - len(S)     # 最后的影响力值为激活的node总数，除去seeds中的
         infl_list.append(influence)
-    print(f"influence list is {infl_list}")
+    # print(f"influence list is {infl_list}")
     infl_mean = np.mean(infl_list)
     infl_std = np.std(infl_list)
 

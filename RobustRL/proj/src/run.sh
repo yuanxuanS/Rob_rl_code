@@ -7,16 +7,16 @@ seeds=$4
 runtime=$5
 edge_p=0.1
 
-graph_pn=26   # 106
-g_train_nbr=20   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
-g_valid_nbr=4
+graph_pn=2   # 106
+g_train_nbr=1   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
+g_valid_nbr=1
 
 
 valid_with_nature=False   # valid with nature?
-valid_episodes=20
+valid_episodes=1
 
-glb_logfile="log_test"
-logdir="8_17"
+glb_logfile="log_5"
+logdir="8_20"
 main_method="rl"    # rl
 with_nature=False
 
@@ -44,14 +44,14 @@ do
             --train-episodes $episode --valid-episodes $valid_episodes
              --with-nature $with_nature
              --GAT-heads $nhead --hidden-dims $hid_dim --alpha $alpha
-            --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/${runtime}_n.txt 2>../pscr/$glb_logfile/$logdir/${runtime}_n_error.txt &"
+            --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/${runtime}_n.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_n_error.txt &"
           else
             COMMAND="python3 -u train_adversary.py --nodes $nodes --budget $budget
             --graph-pool-nbr $graph_pn --train-graph-nbr $g_train_nbr --valid-graph-nbr $g_valid_nbr
             --valid-with-nature $valid_with_nature --edge-p $edge_p --main-method $main_method
             --train-episodes $episode --valid-episodes $valid_episodes
             --GAT-heads $nhead --hidden-dims $hid_dim --alpha $alpha
-            --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/$runtime.txt 2>../pscr/$glb_logfile/$logdir/${runtime}_error.txt &"
+            --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/$runtime.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_error.txt &"
           fi
 
           echo $COMMAND

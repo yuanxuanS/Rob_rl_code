@@ -6,6 +6,7 @@ import networkx as nx
 import random
 import numpy as np
 from layers import GraphAttentionLayer
+import logging
 
 
 
@@ -100,13 +101,17 @@ class GAT(nn.Module):
 
         ## x, features [n, feature_size]
 
-
+        logging.debug(f"input x is \n {x}")
         x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
+        # logging.debug(f"after attention layer,  x is \n {x}")
 
-        x = F.elu(self.out_att(x, adj, z))
+        result = F.elu(self.out_att(x, adj, z))
+        # logging.debug(f"after elu,  x is \n {x}")
 
 
-        result = F.log_softmax(x, dim=0)    # 不是分类问题，应该是纵向softmax
+        # result = F.log_softmax(x, dim=0)    # 不是分类问题，应该是纵向softmax
+        # logging.debug(f"after log softmax, x is \n {x}")
+
         return result
 
 

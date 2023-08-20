@@ -140,8 +140,9 @@ class Runner:
             for i in range(self.environment.budget):
                 logging.debug(f"---------- sub step {i}")
                 state, feasible_action = self.environment.get_seed_state()  # [1, N]
+                infeasible_action = [k for k in range(self.agent.graph.node) if k not in feasible_action]
                 action = self.agent.act(state, feasible_action, "train")
-                logging.debug(f"main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
+                logging.debug(f"curr seed set is {infeasible_action}, main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
                 next_state, reward, done = self.environment.step_seed(i, action)
                 logging.debug(f"get reward is {reward}")
                 feasible_action.remove(action)

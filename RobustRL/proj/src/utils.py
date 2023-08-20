@@ -16,7 +16,7 @@ def compute_advantage(gamma, lmbda, td_delta):
 # compute_advantage(0.9, 0.9, t)
 
 def draw_distri_hist(data_lst, sav_path, name):
-    print("--- return histogram ---")
+    print(f"--- return histogram --- {name}")
     print(f"max is {max(data_lst)}, min is {min(data_lst)}")
     plt.hist(data_lst)
     plt.title(f"histogram of {name}")

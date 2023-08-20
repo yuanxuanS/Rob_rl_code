@@ -20,7 +20,7 @@ from multiprocessing import Manager
 import logging
 
 
-log_dir_global = "log_test"
+log_dir_global = "log_5"
 def setup_logger(path):
     # # 创建一个控制台处理器，将日志输出到控制台
     # console_handler = logging.StreamHandler()
@@ -69,19 +69,22 @@ def gener_node_features(node_nbr, node_dim, feat_nbr, normal_mean):
     for f in range(feat_nbr):
         seed = f
         np.random.seed(seed)
-        tmp = np.random.normal(loc=normal_mean, scale=3, size=(node_nbr, node_dim))
+        # tmp = np.random.normal(loc=normal_mean, scale=3, size=(node_nbr, node_dim))
+        # n_feat_dic[f] = np.clip(tmp, a_min=0, a_max=normal_mean+0.1)  # 0-1
+        n_feat_dic[f] = np.ones([node_nbr, node_dim]) * normal_mean
 
-        n_feat_dic[f] = np.clip(tmp, a_min=0, a_max=normal_mean+0.1)  # 0-1
     return n_feat_dic
 
-def gener_z(node_dim, z_nbr):
+def gener_z(node_dim, z_nbr, z_mean):
     z_dic = {}
     for z_i in range(z_nbr):
         seed = z_i
         np.random.seed(seed)
         # z_dic[z_i] = np.random.rand(1, 2 * node_dim)        # uniform distribution
-        tmp = np.random.normal(loc=0.5, scale=3, size=(1, 2*node_dim))
-        z_dic[z_i] = np.clip(tmp, a_min=0, a_max=1)
+        # tmp = np.random.normal(loc=0.5, scale=3, size=(1, 2*node_dim))
+        # z_dic[z_i] = np.clip(tmp, a_min=0, a_max=1)
+        z_dic[z_i] = np.ones([1, 2*node_dim]) * z_mean
+
     return z_dic
 
 
@@ -130,8 +133,9 @@ env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
                "valid_graph_nbr": args.valid_graph_nbr,  # number of validation graphs in pool
                "feat_pool_n": args.feat_pool_nbr,  # number of trained features in pool
                "node_feat_dims": args.node_feat_dims,
-               "node_feat_normal_mean": 0.1,
+               "node_feat_normal_mean": 0.3,
                "z_pool_n": args.z_pool_nbr,  # number of trained z in pool
+               "z_mean": 0.5,
                "nodes": args.nodes,  # number of graph nodes
                "edge_p": args.edge_p,
                "budgets": args.budget
@@ -189,7 +193,7 @@ device_setting = {
 
 graph_pool = load_graph(env_setting["graph_pool_n"], env_setting["nodes"], env_setting["edge_p"], args.logdir, args.logtime)
 node_feat_pool = gener_node_features(env_setting["nodes"], env_setting["node_feat_dims"], env_setting["feat_pool_n"], env_setting["node_feat_normal_mean"])
-z_pool = gener_z(env_setting["node_feat_dims"], env_setting["z_pool_n"])
+z_pool = gener_z(env_setting["node_feat_dims"], env_setting["z_pool_n"], env_setting["z_mean"])
 propagate_p = 0.7
 
 # nature
@@ -272,11 +276,12 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
     writer = SummaryWriter("../pscr/" + log_dir_global + "/" + args.logdir + "/" + img_str)
 
     # graph save dir
-    env.path = "../pscr/" + log_dir_global + "/" + args.logdir + "/graphs/" + img_str + "_graph"
+    env.path = "../pscr/" + log_dir_global + "/" + args.logdir + "/graphs/" + img_str
     # training
     runner = Runner(env, env_setting, main_agent, main_setting, nature_agent,
                     training_setting, valid_setting, device_setting, writer)
-    runner.path = "../pscr/" + log_dir_global + "/" + args.logdir + "/graphs/" + img_str + "_return_hist"
+    runner.path = "../pscr/" + log_dir_global + "/" + args.logdir + "/graphs/" + img_str
+    main_agent.path = "../pscr/" + log_dir_global + "/" + args.logdir
     runner.train()
 
     returns = runner.final_valid()  # in all graphs，
@@ -324,7 +329,7 @@ for i in range(args.seed_nbr):
     print(f"seed is {this_seed}")
 
     # 设置全局日志配置
-    path = "../pscr/" + log_dir_global + "/" + args.logdir + "/" + args.logtime + "_seed_" + str(this_seed) + ".log"
+    path = "../pscr/" + log_dir_global + "/" + args.logdir + "/logdir/" + args.logtime + "_seed_" + str(this_seed) + ".log"
     logger = setup_logger(path)
 
     p = multiprocessing.Process(target=run_one_seed,

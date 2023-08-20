@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
+import logging
 
 class GraphAttentionLayer(nn.Module):
     """
@@ -38,17 +39,24 @@ class GraphAttentionLayer(nn.Module):
         # print(f"{self.print_tag} adj is {adj}")
         # print(f"{self.print_tag} adj size {adj.size()}")
         Wh = torch.mm(h, self.W) # h.shape: (N, in_features), Wh.shape: (N, out_features)
-        # print(f"{self.print_tag} -- foward --- Wh {Wh}")
+        # logging.debug(f" --  Wh \n {Wh}")
         e = self._prepare_attentional_mechanism_input(Wh, h, z)   # 注意力系数, [N, N]
-        # print(f"{self.print_tag} -- foward --- e {e}")
+        # logging.debug(f" -- e \n {e}")
 
         zero_vec = -9e15*torch.ones_like(e)
         attention = torch.where(adj > 0, e, zero_vec)       # 相邻则为e系数， 否则为负无穷 [N, N]
+        torch.set_printoptions(profile="full")
+        # logging.debug(f" -- adj is \n {adj}")
+        # logging.debug(f" -- before softmax\n {attention}")
+        torch.set_printoptions(profile="default")
+
         attention = F.softmax(attention, dim=1)
-        # print(f"{self.print_tag} -- foward --attention after softmax \n{attention}")
+        # logging.debug(f" -- after softmax \n {attention}")
 
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
-        # print(f"{self.print_tag} -- foward --- final h_prime \n {h_prime}")
+        torch.set_printoptions(profile="full")
+        # logging.debug(f" -- final h_prime \n {h_prime}")
+        torch.set_printoptions(profile="default")
         if self.concat:
             result = F.elu(h_prime)
             # print(f"{self.print_tag} after elu")
@@ -80,8 +88,11 @@ class GraphAttentionLayer(nn.Module):
             a = a.view(-1, 1)
         # print(f"{self.print_tag} {a.size()}")
         length = int(a.size()[0] / 2)
+        # logging.debug(f"a: \n {a}")
         Wh1 = torch.matmul(Wh, a[:length, :])
+        # logging.debug(f"Wh1: \n {Wh1}")
         Wh2 = torch.matmul(Wh, a[length:, :])
+        # logging.debug(f"Wh2: \n {Wh2}")
         # broadcast add
         e = Wh1 + Wh2.T
         return e
