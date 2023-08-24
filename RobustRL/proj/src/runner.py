@@ -98,7 +98,7 @@ class Runner:
             self.global_iter += 1
 
             # sample graph
-            g_id = random.randint(0, self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"])
+            g_id = random.randint(0, self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] - 1)
             self.environment.init_graph(g_id)
             self.nature.init_graph(g_id)
             self.agent.init_graph(g_id)

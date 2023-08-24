@@ -201,6 +201,7 @@ class DQAgent:
 
         losses = torch.tensor(0.)
         for transition in batch:
+
             state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
             # 用目标网络计算目标值y
             graph = self.graphs[g_id]
@@ -245,21 +246,21 @@ class DQAgent:
             # logging.debug(f" target , requires_grad {target.requires_grad}")
 
             losses  = losses + self.criterion(q, target)
-        losses_a = make_dot(losses)
-        losses_a.render(
-            filename="losses",
-            directory=self.path + "/logdir",
-            format="png"
-        )
+        # losses_a = make_dot(losses)
+        # losses_a.render(
+        #     filename="losses",
+        #     directory=self.path + "/logdir",
+        #     format="png"
+        # )
         logging.debug(f"losses is {losses}")
         # loss = torch.mean(torch.tensor(losses, requires_grad=True))
         loss = losses / len(batch)
-        loss_a = make_dot(loss)
-        loss_a.render(
-            filename="loss",
-            directory=self.path + "/logdir",
-            format="png"
-        )
+        # loss_a = make_dot(loss)
+        # loss_a.render(
+        #     filename="loss",
+        #     directory=self.path + "/logdir",
+        #     format="png"
+        # )
         # h = loss.register_hook(self.hook)
         # self.hs.append(h)
         # logging.debug(f" loss , requires_grad {loss.requires_grad}, grad {loss.grad}")
@@ -276,9 +277,9 @@ class DQAgent:
         #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
 
         loss.backward()
-        logging.debug(f"after backward, loss grad {loss.grad}")
-        # for name, param in self.policy_model.named_parameters():
-        #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+        logging.debug(f"after backward")
+        for name, param in self.policy_model.named_parameters():
+            logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
         self.optimizer.step()
 
         for h in self.hs:
@@ -286,8 +287,10 @@ class DQAgent:
 
         # 每 C step，更新目标网络 = 当前的行为网络
         if i % self.copy_model_steps == 0:
+            logging.debug(f"reload target model, policy model params: {self.policy_model.state_dict()}\n target model param: {self.target_model.state_dict()}")
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())  # ？？ 是这样用吗
+            logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
         return self.loss
 
 

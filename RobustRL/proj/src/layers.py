@@ -50,12 +50,14 @@ class GraphAttentionLayer(nn.Module):
         # logging.debug(f" -- before softmax\n {attention}")
         torch.set_printoptions(profile="default")
 
-        attention = F.softmax(attention, dim=1)
+        # attention = F.softmax(attention, dim=1)       # 要考虑degree， 所以不能softmax
+        torch.set_printoptions(profile="full")
         # logging.debug(f" -- after softmax \n {attention}")
+        torch.set_printoptions(profile="default")
 
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
         torch.set_printoptions(profile="full")
-        # logging.debug(f" -- final h_prime \n {h_prime}")
+        logging.debug(f" -- final h_prime \n {h_prime}")
         torch.set_printoptions(profile="default")
         if self.concat:
             result = F.elu(h_prime)

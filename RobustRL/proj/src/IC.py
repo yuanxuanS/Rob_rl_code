@@ -46,7 +46,7 @@ def runIC_repeat(G, S, p=None, sample=100):
         return 0., 0.
     for i in range(sample):
         T = runIC(G, S, p=p)
-        influence = len(T) - len(S)     # 最后的影响力值为激活的node总数，除去seeds中的
+        influence = len(T)     # 最后的影响力值为激活的node总数, 包括seed set
         infl_list.append(influence)
     # print(f"influence list is {infl_list}")
     infl_mean = np.mean(infl_list)
