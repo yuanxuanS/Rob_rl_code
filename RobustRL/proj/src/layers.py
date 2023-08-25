@@ -51,13 +51,19 @@ class GraphAttentionLayer(nn.Module):
         torch.set_printoptions(profile="default")
 
         # attention = F.softmax(attention, dim=1)       # 要考虑degree， 所以不能softmax
+        # 去除-9e15带来的爆炸
+        # attention = attention.clamp(-1e15)    # wrong 926.txt
+        attention = torch.sigmoid(attention)
         torch.set_printoptions(profile="full")
         # logging.debug(f" -- after softmax \n {attention}")
+        # logging.debug(f" -- after clamp \n {attention}")
+        # logging.debug(f" -- after sigmoid \n {attention}")
+
         torch.set_printoptions(profile="default")
 
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
         torch.set_printoptions(profile="full")
-        logging.debug(f" -- final h_prime \n {h_prime}")
+        # logging.debug(f" -- final h_prime \n {h_prime}")
         torch.set_printoptions(profile="default")
         if self.concat:
             result = F.elu(h_prime)

@@ -183,9 +183,9 @@ class GAT(nn.Module):
 
         ## x, features [n, feature_size]
 
-        logging.debug(f"input x is \n {x}")
+        # logging.debug(f"input x is \n {x}")
         x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
-        logging.debug(f"after attention layer,  x is \n {x}")
+        # logging.debug(f"after attention layer,  x is \n {x}")
 
         result = F.elu(self.out_att(x, adj, z))
         # logging.debug(f"after elu,  x is \n {x}")

@@ -140,9 +140,9 @@ class DQAgent:
 
                 q_a[infeasible_action] = -9e15
 
-                logging.debug(f"get model params")
-                for name, param in self.policy_model.named_parameters():
-                    logging.debug(f"this layer: {name}, params: {param}")
+                # logging.debug(f"get model params")
+                # for name, param in self.policy_model.named_parameters():
+                #     logging.debug(f"this layer: {name}, params: {param}")
 
                 logging.debug(f"act, final q_a is {q_a}")
                 action = q_a.argmax()
