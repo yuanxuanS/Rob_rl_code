@@ -3,7 +3,7 @@ import random
 import torch
 import torch.nn.functional as F
 from torchsummary import summary
-from models import GAT
+from models import GAT, attentions
 from layers import GraphAttentionLayer
 import copy
 import numpy as np
@@ -24,8 +24,9 @@ def _init_fn(worker_id):
     np.random.seed(int(seed))
 
 class GATValueNet(GAT):
-    def __init__(self, node_num, nfeat, nhid, alpha, nheads, mergeZ, observe_state, use_cuda, device):
-        super(GATValueNet, self).__init__(nfeat, nhid, 1, alpha, nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
+    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device):
+        super(GATValueNet, self).__init__(layer_tuple, nfeat, nhid_tuple, alpha,
+                                          nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         # 映射为一个scalar
         self.map_W = torch.nn.Parameter(torch.empty(node_num, 1))
@@ -62,12 +63,13 @@ class GATValueNet(GAT):
 
 
 class GATPolicyNet(GAT):
-    def __init__(self, node_num, nfeat, nhid, nout, alpha, nheads, mergeZ, observe_state, use_cuda, device):
-        super(GATPolicyNet, self).__init__(nfeat, nhid, nout, alpha,
+    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device):
+        super(GATPolicyNet, self).__init__(layer_tuple, nfeat, nhid_tuple, alpha,
                                           nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         self.out_att_mu = self.out_att
-        self.out_att_std = GraphAttentionLayer(self.nhid * nheads, self.nout, alpha=self.alpha, concat=False, mergeZ=False)   # 只有layer的out_feat = 节点特征维度才能融合（z size才和a相同），所以mergeZ=False
+
+        self.out_att_std = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, self.mergeZ, self.mergeState)
 
         # 映射为想要的维度， 输入 (n* 2*node_feat_dim).T
         self.mu_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W
@@ -205,15 +207,30 @@ class PPOContinuousAgent:
         self.epochs = epochs
 
         if self.model_name == 'GAT_PPO':
-            nhid = nature_setting["hidden_dims"]
 
             alpha = nature_setting["alpha"]  # leakyReLU的alpha
             nhead = nature_setting["nheads"]
-            self.actor = GATPolicyNet(self.node_nbr, self.node_features_dims, nhid, 2 * self.node_features_dims, alpha,
-                                      nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
-            self.critic = GATValueNet(self.node_nbr, self.node_features_dims, nhid, alpha, nhead, mergeZ=self.merge_z,
+            layer_tp = (nature_setting["GAT_atten_layer"], nature_setting["GAT_out_atten_layer"])
+            hid_dim_tp = (nature_setting["GAT_hid_dim"], nature_setting["GAT_out_hid_dim"])
+
+            self.critic = GATValueNet(self.node_nbr, layer_tp, self.node_features_dims, hid_dim_tp, alpha,
+                                      nhead, mergeZ=self.merge_z,
                                       observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)
-            #
+
+            hidden_dim_list = [list(inner_tuple) for inner_tuple in hid_dim_tp]
+            out_atten_list = hidden_dim_list[-1]
+            # Modify the list
+            out_atten_list[-1] = 2 * self.node_features_dims
+
+            # convert to tuple
+            hid_dim_tp2 = (tuple(hidden_dim_list[0]), tuple(out_atten_list))
+
+            assert hid_dim_tp2[-1][-1] == 2 * self.node_features_dims, "out feature of nature policy model must be 2xnode feat"
+            self.actor = GATPolicyNet(self.node_nbr, layer_tp, self.node_features_dims, hid_dim_tp2, alpha,
+                                      nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
+
+
+
 
             if self.use_cuda:
                 self.actor.to(self.device)

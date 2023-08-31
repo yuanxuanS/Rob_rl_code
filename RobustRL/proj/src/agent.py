@@ -38,6 +38,7 @@ class DQAgent:
         self.node_features = None
         self.node_features_dims = node_dim
         # policy
+        self.algor = main_setting["rl_algor"]
         self.curr_epsilon = init_epsilon
         self.policy_model = None
         self.target_model = None
@@ -58,15 +59,22 @@ class DQAgent:
         self.path = None
 
         if self.model_name == 'GAT_QN':
-            hidden_dim = main_setting["hidden_dims"]
 
             alpha = main_setting["alpha"]  # leakyReLU的alpha
             nhead = main_setting["nheads"]
 
-            self.policy_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=self.merge_z, mergeState=True, use_cuda=self.use_cuda, device=self.device)
-            self.target_model = GAT(nfeat=self.node_features_dims, nhid=hidden_dim, nout=1, alpha=alpha,
-                                    nheads=nhead, mergeZ=self.merge_z, mergeState=True, use_cuda=self.use_cuda, device=self.device)
+            layer_tp = (main_setting["GAT_atten_layer"], main_setting["GAT_out_atten_layer"])
+            hid_dim_tp = (main_setting["GAT_hid_dim"], main_setting["GAT_out_hid_dim"])
+
+            out_nhid_tp = hid_dim_tp[-1]
+            assert out_nhid_tp[-1] == 1, "out feature of agent model must be one"
+
+            self.policy_model = GAT(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+                                    alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
+                                    use_cuda=self.use_cuda, device=self.device)
+            self.target_model = GAT(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+                                    alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
+                                    use_cuda=self.use_cuda, device=self.device)
             if self.use_cuda:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)
@@ -208,20 +216,31 @@ class DQAgent:
             adj = torch.Tensor(graph.adj_matrix)
             node_feature = torch.Tensor(self.node_feat_pool[ft_id])
             hyper = torch.Tensor(self.hyper_pool[hyper_id])
-            q_without_mask = self.target_model(node_feature.to(self.device), adj.to(self.device),
-                                                torch.Tensor(next_state).to(self.device), z=hyper.to(self.device))
+
+            q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                    torch.Tensor(state).to(self.device), z=hyper.to(self.device))
+
+            q_target = self.target_model(node_feature.to(self.device), adj.to(self.device),
+                                               torch.Tensor(next_state).to(self.device), z=hyper.to(self.device))
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
             # print(f"{self.print_tag} infeasible action is {infeasible_action}")
+            q_target[infeasible_action] = -9e15
 
-            q_without_mask[infeasible_action] = -9e15
+            if self.algor == "DQN":
 
-            target = reward + (1 - done) * self.gamma * q_without_mask.max()
+                target = reward + (1 - done) * self.gamma * q_target.max()
+            elif self.algor == "DDQN":
+                logging.debug(f"q target, max value is {q_target.max()}")
+                policy_max_action = q_a.argmax()
+                logging.debug(f"policy max action is {policy_max_action}")
+                logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
+                target = reward + (1 - done) * self.gamma * q_target[policy_max_action]
+
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
             # print(f"{self.print_tag} calculated target q is {target}")
             # 用行为网络计算当前值q
-            q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
-                                    torch.Tensor(state).to(self.device), z=hyper.to(self.device))
+
 
             # g_b = make_dot(q_a)
             # g_b.render(

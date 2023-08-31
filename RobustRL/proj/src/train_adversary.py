@@ -18,6 +18,7 @@ import seed
 import multiprocessing
 from multiprocessing import Manager
 import logging
+import ast
 
 
 log_dir_global = "log_5"
@@ -107,7 +108,12 @@ parser.add_argument("--valid-episodes", type=int, default=10)       # episodes i
 parser.add_argument("--with-nature", type=bool, default=False)
 
 parser.add_argument("--GAT-heads", type=int, default=1)
-parser.add_argument("--hidden-dims", type=int, default=4)
+parser.add_argument("--GAT-atten-layer", type=int, default=1)
+parser.add_argument("--GAT-out-atten-layer", type=int, default=1)
+parser.add_argument("--GAT-hid-dim", type=str, default="")
+parser.add_argument("--GAT-out-hid-dim", type=str, default="")
+
+
 parser.add_argument("--alpha", type=float, default=0.2)
 
 parser.add_argument("--seed-nbr", type=int, default=3)
@@ -146,11 +152,17 @@ main_setting = {
     "agent_method": args.main_method,  # rl
     "observe_z": args.observe_z,
     "nheads": args.GAT_heads,
-    "hidden_dims": args.hidden_dims,
     "alpha": args.alpha,
     "gamma": args.gamma,
-    "lr": args.lr
+    "lr": args.lr,
+    "rl_algor": "DQN",      # "DQN"
+    "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
+    "GAT_out_atten_layer": args.GAT_out_atten_layer,
+    "GAT_hid_dim": ast.literal_eval(args.GAT_hid_dim),
+    "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim),            # final one must be 1
 }
+
+nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)
 
 # nature's settings
 nature_setting = {
@@ -160,7 +172,10 @@ nature_setting = {
     "canObserve_hyper": args.observe_z,
     "canObserve_state": False,
     "nheads": args.GAT_heads,
-    "hidden_dims": args.hidden_dims,
+    "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
+    "GAT_out_atten_layer": args.GAT_out_atten_layer,
+    "GAT_hid_dim": ast.literal_eval(args.GAT_hid_dim),
+    "GAT_out_hid_dim": nature_out_atten_dim,            # final one must be 1
     "alpha": args.alpha,
     "gamma": args.gamma,     # = main agent gamma
     "actor_lr": args.lr,
@@ -221,6 +236,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
                                       env_setting["nodes"], env_setting["node_feat_dims"],
                                       lmbda, eps, epochs, device_setting["use_cuda"],
                                       device_setting["device"])
+
 
     if main_setting['agent_method'] == 'rl':
         model_name = 'GAT_QN'
