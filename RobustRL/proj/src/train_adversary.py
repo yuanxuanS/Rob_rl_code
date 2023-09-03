@@ -21,7 +21,7 @@ import logging
 import ast
 
 
-log_dir_global = "log_5"
+log_dir_global = "log_test"
 
 parser = argparse.ArgumentParser()
 # log setting

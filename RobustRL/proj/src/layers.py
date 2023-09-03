@@ -52,17 +52,7 @@ class GraphAttentionLayer(nn.Module):
 
         e = self._prepare_attentional_mechanism_input(Wh, h, z)   # 注意力系数, [N, N]
         # logging.debug(f" -- e \n {e}")
-        if self.method == "base":
-            pass
-        elif self.method == "aggre_degree":
-            # s
-            # logging.debug(f"aggregate degree, \n {s_mat}")
-            s = s_mat
-            # logging.debug(f"w_ei: {self.W_ei}, w_si: {self.W_si}")
-            # logging.debug(f"before aggre s : \n {e}")
 
-            e = abs(self.W_ei) * e + abs(self.W_si) * s
-            # logging.debug(f"after aggre s : \n {e}")
 
         zero_vec = -9e15*torch.ones_like(e)
         attention = torch.where(adj > 0, e, zero_vec)       # 相邻则为e系数， 否则为负无穷 [N, N]
@@ -72,9 +62,27 @@ class GraphAttentionLayer(nn.Module):
         torch.set_printoptions(profile="default")
 
         attention = F.softmax(attention, dim=1)       # 要考虑degree
+        torch.set_printoptions(profile="full")
+        logging.debug(f" --attenion: after softmax \n {attention}")
+        # logging.debug(f" -- after clamp \n {attention}")
+        # logging.debug(f" -- after sigmoid \n {attention}")
+
+        torch.set_printoptions(profile="default")
         # 去除-9e15带来的爆炸
         # attention = attention.clamp(-1e15)    # wrong 926.txt
         # attention = torch.sigmoid(attention)
+        if self.method == "base":
+            pass
+        elif self.method == "aggre_degree":
+            # s
+            logging.debug(f"aggregate degree, \n {s_mat}")
+            s = s_mat
+            # logging.debug(f"w_ei: {self.W_ei}, w_si: {self.W_si}")
+            # logging.debug(f"before aggre s : \n {e}")
+
+            attention = abs(self.W_ei) * attention + abs(self.W_si) * s
+            logging.debug(f"-- attention: after aggre s : \n {attention}")
+
         torch.set_printoptions(profile="full")
         # logging.debug(f" -- after softmax \n {attention}")
         # logging.debug(f" -- after clamp \n {attention}")
