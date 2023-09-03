@@ -17,14 +17,14 @@ valid_with_nature=False   # valid with nature?
 valid_episodes=1
 
 glb_logfile="log_5"
-logdir="8_29"
+logdir="9_3"
 main_method="rl"    # rl
 with_nature=False
 
 # hyper parameter of GAT
 nheads=(8)
-atten_layer=3
-hid_dim='(16, 8, 4,)'
+atten_layer=1
+hid_dim='(16, )'
 out_atten_layer=1
 out_hid_dim='(1,)'  # final one must be 1
 alphas=(0.2)

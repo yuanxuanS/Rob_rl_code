@@ -39,6 +39,7 @@ class DQAgent:
         self.node_features_dims = node_dim
         # policy
         self.algor = main_setting["rl_algor"]
+        self.method = main_setting["GAT_mtd"]
         self.curr_epsilon = init_epsilon
         self.policy_model = None
         self.target_model = None
@@ -71,10 +72,10 @@ class DQAgent:
 
             self.policy_model = GAT(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
                                     alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
-                                    use_cuda=self.use_cuda, device=self.device)
+                                    use_cuda=self.use_cuda, device=self.device, method=self.method)
             self.target_model = GAT(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
                                     alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
-                                    use_cuda=self.use_cuda, device=self.device)
+                                    use_cuda=self.use_cuda, device=self.device, method=self.method)
             if self.use_cuda:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)
@@ -95,6 +96,7 @@ class DQAgent:
     def init_graph(self, g_id):
         self.graph = self.graphs[g_id]  # a graph, Graph_IM instance
         self.adj = torch.Tensor(self.graph.adj_matrix)
+        self.s_mat = self.graph.adm
 
     def init_n_feat(self, ft_id):
 
@@ -138,9 +140,13 @@ class DQAgent:
                 # print(f"{self.print_tag} adj_matrix is {self.graph.adj_matrix}")
                 input_node_feat = copy.deepcopy(self.node_features)
 
+                logging.debug(f" get policy ")
 
                 q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
-                                        torch.Tensor(observation).to(self.device), z=self.z.to(self.device))
+                                        torch.Tensor(observation).to(self.device), self.s_mat,
+                                        z=self.z.to(self.device))
+                logging.debug(f" get policy done , action")
+
                 if self.use_cuda:
                     q_a = q_a.cpu()
                 infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
@@ -218,10 +224,12 @@ class DQAgent:
             hyper = torch.Tensor(self.hyper_pool[hyper_id])
 
             q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
-                                    torch.Tensor(state).to(self.device), z=hyper.to(self.device))
+                                    torch.Tensor(state).to(self.device), self.s_mat,
+                                    z=hyper.to(self.device))
 
             q_target = self.target_model(node_feature.to(self.device), adj.to(self.device),
-                                               torch.Tensor(next_state).to(self.device), z=hyper.to(self.device))
+                                        torch.Tensor(next_state).to(self.device), self.s_mat,
+                                         z=hyper.to(self.device))
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
             # print(f"{self.print_tag} infeasible action is {infeasible_action}")
             q_target[infeasible_action] = -9e15

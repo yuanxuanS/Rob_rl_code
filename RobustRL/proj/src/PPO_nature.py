@@ -24,9 +24,9 @@ def _init_fn(worker_id):
     np.random.seed(int(seed))
 
 class GATValueNet(GAT):
-    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device):
+    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device, method):
         super(GATValueNet, self).__init__(layer_tuple, nfeat, nhid_tuple, alpha,
-                                          nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
+                                          nheads, mergeZ, observe_state, use_cuda, device, method)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         # 映射为一个scalar
         self.map_W = torch.nn.Parameter(torch.empty(node_num, 1))
@@ -34,26 +34,30 @@ class GATValueNet(GAT):
 
         self.print_tag = "Models --- PPO ValueNet"
 
-    def forward(self, x_feat, adj, observation=None, z=None):
+    def forward(self, x_feat, adj, observation=None, s_mat=None, z=None):
         x = copy.deepcopy(x_feat)
         if not isinstance(x, torch.Tensor):
             x = torch.Tensor(x)
         if not isinstance(adj, torch.Tensor):
             adj = torch.Tensor(adj)
-
+        if self.method == "aggre_degree":
+            if not isinstance(s_mat, torch.Tensor):
+                s_mat = torch.Tensor(s_mat)
         ## x, features [n, feature_size]
 
         if self.mergeState:
             seed_set = [idx for idx in range(len(observation[0])) if observation[0][idx] == 1]
             sdset_mask = torch.zeros([x.size()[0], x.size()[1]])
             sdset_mask[seed_set] += 1.
+            if self.use_cuda:
+                sdset_mask = sdset_mask.to(self.device)
             sdset_mask = sdset_mask * self.theta
             x = x + sdset_mask
 
 
-        x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
+        x = torch.cat([att(x, adj, s_mat, z) for att in self.attentions], dim=1)
         #
-        x = F.elu(self.out_att(x, adj, z))
+        x = F.elu(self.out_att(x, adj, s_mat, z))
 
         result = F.log_softmax(x, dim=0)    # 不是分类问题，应该是纵向softmax
 
@@ -63,13 +67,13 @@ class GATValueNet(GAT):
 
 
 class GATPolicyNet(GAT):
-    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device):
+    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device, method):
         super(GATPolicyNet, self).__init__(layer_tuple, nfeat, nhid_tuple, alpha,
-                                          nheads, mergeZ, observe_state, use_cuda, device)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
+                                          nheads, mergeZ, observe_state, use_cuda, device, method)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         self.out_att_mu = self.out_att
 
-        self.out_att_std = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, self.mergeZ, self.mergeState)
+        self.out_att_std = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, self.mergeZ, node_num, method)
 
         # 映射为想要的维度， 输入 (n* 2*node_feat_dim).T
         self.mu_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W
@@ -79,7 +83,7 @@ class GATPolicyNet(GAT):
 
         self.print_tag = " PPO PolicyNet ---"
 
-    def forward(self, x_feat, adj, observation=None, z=None, sv_x=False):
+    def forward(self, x_feat, adj, observation=None, s_mat=None, z=None, sv_x=False):
         x = copy.deepcopy(x_feat)
 
         if sv_x:
@@ -96,11 +100,17 @@ class GATPolicyNet(GAT):
 
         if not isinstance(adj, torch.Tensor):
             adj = torch.Tensor(adj)
+
+        if self.method == "aggre_degree":
+            if not isinstance(s_mat, torch.Tensor):
+                s_mat = torch.Tensor(s_mat)
         #融合seed set信息
         if self.mergeState:
             seed_set = [idx for idx in range(len(observation[0])) if observation[0][idx] == 1]
             sdset_mask = torch.zeros([x.size()[0], x.size()[1]])
             sdset_mask[seed_set] += 1.
+            if self.use_cuda:
+                sdset_mask = sdset_mask.to(self.device)
             sdset_mask = sdset_mask * self.theta
             x = x + sdset_mask
             # print(f"seed set mask is {sdset_mask}")
@@ -116,7 +126,7 @@ class GATPolicyNet(GAT):
             writeTxT(filename1, "[3] after dropout")
             writeTxT(filename1, x)
 
-        x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
+        x = torch.cat([att(x, adj, s_mat, z) for att in self.attentions], dim=1)
 
         if sv_x:
             writeTxT(filename1, "[4] after cat")
@@ -132,12 +142,12 @@ class GATPolicyNet(GAT):
         # print(f"{self.print_tag} before W map x {x}")
         # mu_map = self.mu_W(self.out_att_mu(x, adj, z).T)
         # std_map = self.std_W(self.out_att_std(x, adj, z).T)
-        mu_map = torch.mm(self.out_att_mu(x, adj, z).T, self.mu_W)
+        mu_map = torch.mm(self.out_att_mu(x, adj, s_mat, z).T, self.mu_W)
 
         if sv_x:
             writeTxT(filename1, "[6] get mu_map")
             writeTxT(filename1, x)
-        std_map = torch.mm(self.out_att_std(x, adj, z).T, self.std_W)
+        std_map = torch.mm(self.out_att_std(x, adj, s_mat, z).T, self.std_W)
 
         if sv_x:
             writeTxT(filename1, "[7] get std_map")
@@ -193,6 +203,7 @@ class PPOContinuousAgent:
         self.policy_dis = nature_setting["PolicyDisName"]  # “Beta” or "Gauss"
         self.norm_name = nature_setting["PolicyNormName"]  # norm method when Gaussian distribution, "sigmoid" or "softmax"
         self.model_name = nature_setting["agent_method"]
+        self.method = nature_setting["GAT_mtd"]
 
         self.graph = None
         self.adj = None
@@ -215,7 +226,7 @@ class PPOContinuousAgent:
 
             self.critic = GATValueNet(self.node_nbr, layer_tp, self.node_features_dims, hid_dim_tp, alpha,
                                       nhead, mergeZ=self.merge_z,
-                                      observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)
+                                      observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device, method=self.method)
 
             hidden_dim_list = [list(inner_tuple) for inner_tuple in hid_dim_tp]
             out_atten_list = hidden_dim_list[-1]
@@ -227,7 +238,7 @@ class PPOContinuousAgent:
 
             assert hid_dim_tp2[-1][-1] == 2 * self.node_features_dims, "out feature of nature policy model must be 2xnode feat"
             self.actor = GATPolicyNet(self.node_nbr, layer_tp, self.node_features_dims, hid_dim_tp2, alpha,
-                                      nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device)  # 从n个中随意选一个分布
+                                      nhead, mergeZ=self.merge_z, observe_state=self.observe_state, use_cuda=self.use_cuda, device=self.device, method=self.method)  # 从n个中随意选一个分布
 
 
 

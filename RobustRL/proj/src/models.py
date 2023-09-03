@@ -113,16 +113,16 @@ class S2V_QN(torch.nn.Module):
         return q
 
 
-hidden_reg = 0
-embed_dim = 5
-len_pre_pooling = 0
-len_post_pooling = 0
-T = 2
-s2v = S2V_QN(reg_hidden=hidden_reg, embed_dim=embed_dim,
-             len_pre_pooling=len_pre_pooling, len_post_pooling=len_post_pooling, T=T)
+# hidden_reg = 0
+# embed_dim = 5
+# len_pre_pooling = 0
+# len_post_pooling = 0
+# T = 2
+# s2v = S2V_QN(reg_hidden=hidden_reg, embed_dim=embed_dim,
+#              len_pre_pooling=len_pre_pooling, len_post_pooling=len_post_pooling, T=T)
 
 class attentions(nn.Module):
-    def __init__(self, layers, nfeat, nhid, alpha, mergeZ, node_dim):
+    def __init__(self, layers, nfeat, nhid, alpha, mergeZ, node_dim, method="base"):
         super(attentions, self).__init__()
 
         self.nlayer = layers
@@ -131,6 +131,7 @@ class attentions(nn.Module):
         self.alpha = alpha
         self.mergeZ = mergeZ
         self.node_dim = node_dim
+
 
         assert self.nlayer == len(self.nhid_tuple), "layer number not equals to hidden number"
 
@@ -143,13 +144,13 @@ class attentions(nn.Module):
             else:
                 in_dim = self.nhid_tuple[i-1]
             layer = GraphAttentionLayer(in_dim, out_dim, alpha=self.alpha, concat=True, mergeZ=self.mergeZ,
-                                        node_dim=self.node_dim)
+                                        node_dim=self.node_dim, method=method)
             self.attention.append(layer)
 
-    def forward(self, x, adj, z=None):
+    def forward(self, x, adj, s_mat, z=None):
         h = x
         for t in range(self.nlayer):
-            h = self.attention[t](h, adj, z)
+            h = self.attention[t](h, adj, s_mat, z)
             print(f" layer {t} -- size {h.size()} ")
             # print(f"h {h}")
 
@@ -174,7 +175,7 @@ class attentions(nn.Module):
 
 
 class GAT(nn.Module):
-    def __init__(self, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device):
+    def __init__(self, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
         """Dense version of GAT."""
         super(GAT, self).__init__()
 
@@ -187,13 +188,14 @@ class GAT(nn.Module):
         self.alpha = alpha
         self.mergeZ = mergeZ
         self.mergeState = mergeState
+        self.method = method
         # k多头，有k个头就有k个层。
         # nhid 就是输出的特征大小。 因为GAT的隐藏层hid会输出特征
         # print(f"nhid is {nhid}")
         self.nlayer, self.out_layer = layer_tuple      # (atten layer, out atten layer-1, ) if outatten is 1 layer: nhead*outfeat, 1
 
 
-        self.attentions = [attentions(self.nlayer, self.nfeat, self.nhid_tuple, alpha=self.alpha, mergeZ=self.mergeZ, node_dim=self.nfeat) for _ in range(nheads)]
+        self.attentions = [attentions(self.nlayer, self.nfeat, self.nhid_tuple, alpha=self.alpha, mergeZ=self.mergeZ, node_dim=self.nfeat, method=method) for _ in range(nheads)]
 
         for i, attention in enumerate(self.attentions):
             # print(f"第{i}个layer, {str(attention)}")
@@ -203,7 +205,7 @@ class GAT(nn.Module):
         #################
         # print(f"add final attention layer")
         # self.out_att = GraphAttentionLayer(self.nhid[-1] * nheads, self.nout, alpha=self.alpha, concat=False, mergeZ=self.mergeZ, node_dim=self.nfeat)
-        self.out_att = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, self.mergeZ, self.mergeState)
+        self.out_att = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, self.mergeZ, self.nfeat, method=method)
 
         # seed set feature theta
         self.theta = nn.Parameter(torch.empty(1, self.nfeat))  # 大小和每个节点的feature向量一样
@@ -213,12 +215,15 @@ class GAT(nn.Module):
         self.print_tag = "Models ---"
 
 
-    def forward(self, x, adj, observation, z=None):
+    def forward(self, x, adj, observation, s_mat, z=None):
 
         if not isinstance(x, torch.Tensor):
             x = torch.Tensor(x)
         if not isinstance(adj, torch.Tensor):
             adj = torch.Tensor(adj)
+        if self.method == "aggre_degree":
+            if not isinstance(s_mat, torch.Tensor):
+                s_mat = torch.Tensor(s_mat)
         #融合seed set信息
         if self.mergeState:
             seed_set = [idx for idx in range(len(observation[0])) if observation[0][idx] == 1]
@@ -237,11 +242,11 @@ class GAT(nn.Module):
         ## x, features [n, feature_size]
 
         # logging.debug(f"input x is \n {x}")
-        x = torch.cat([att(x, adj, z) for att in self.attentions], dim=1)
+        x = torch.cat([att(x, adj, s_mat, z) for att in self.attentions], dim=1)
         # logging.debug(f"after attention layer,  x size is \n {x.size()}")
         print(f"------ after attention layer,  x size is \n {x.size()}")
 
-        result = F.elu(self.out_att(x, adj, z))
+        result = F.elu(self.out_att(x, adj, s_mat, z))
         # logging.debug(f"after out atten,  x size is \n {result.size()}")
         print(f"------ after out atten,  x size is \n {result.size()}")
 
@@ -258,16 +263,18 @@ class GAT(nn.Module):
 # alpha = 0.2     # leakyReLU的alpha
 # nhead = 2
 # model = GAT(layer, nfeat=features_dim, nhid_tuple=hidden_dim, alpha=alpha, nheads=nhead,
-#             mergeZ=False, mergeState=False, use_cuda=False, device=False)
-# # test
+#             mergeZ=False, mergeState=False, use_cuda=False, device=False, method="aggre_degree")
+# # # test
 # graph = Graph_IM(nodes=10, edges_p=0.5)
 # adj_matrix = graph.adj_matrix
-# # print(f"graph adj matrix {graph.adj_matrix}")
+# # # print(f"graph adj matrix {graph.adj_matrix}")
 # adj_matrix = torch.Tensor(adj_matrix)
 # xv = generate_node_feature(graph, features_dim)
-# # print(f"node feature vector size {xv.size()}")     # [0-100]
+# # # print(f"node feature vector size {xv.size()}")     # [0-100]
 # xv = torch.Tensor(xv)       # torch的输入必须是tensor
-# y = model(xv, adj_matrix, None)
+#
+# s_mat = graph.adm
+# y = model(xv, adj_matrix, None, s_mat, None)
 # print(f"y size {y.size()}")
 #
 # print(f"get y from GAT is {y}")     # [n, 1]

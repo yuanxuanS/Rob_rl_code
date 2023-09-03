@@ -22,6 +22,51 @@ import ast
 
 
 log_dir_global = "log_5"
+
+parser = argparse.ArgumentParser()
+# log setting
+parser.add_argument("--logdir", type=str, default="")
+parser.add_argument("--logtime", type=str, default="")
+# algor setting
+parser.add_argument("--graph-pool-nbr", type=int, default=1)
+parser.add_argument("--train-graph-nbr", type=int, default=1)
+parser.add_argument("--valid-graph-nbr", type=int, default=4)
+parser.add_argument("--nodes", type=int, default=100)
+parser.add_argument("--budget", type=int, default=4)
+
+parser.add_argument("--valid-with-nature", type=bool, default=False)      # random or rl_nature, hyperparams generation way in validation
+parser.add_argument("--edge-p", type=float, default=0.1)
+parser.add_argument("--train-episodes", type=int, default=10)       # total training episodes
+parser.add_argument("--valid-episodes", type=int, default=10)       # episodes in every validation
+
+parser.add_argument("--with-nature", type=bool, default=False)
+
+parser.add_argument("--GAT-heads", type=int, default=1)
+parser.add_argument("--GAT-atten-layer", type=int, default=1)
+parser.add_argument("--GAT-out-atten-layer", type=int, default=1)
+parser.add_argument("--GAT-hid-dim", type=str, default="")
+parser.add_argument("--GAT-out-hid-dim", type=str, default="")
+
+
+parser.add_argument("--alpha", type=float, default=0.2)
+
+parser.add_argument("--seed-nbr", type=int, default=3)
+parser.add_argument("--gamma", type=float, default=0.99)
+parser.add_argument("--lr", type=float, default=1e-3)
+
+#
+parser.add_argument("--node-feat-dims", type=int, default=3)
+parser.add_argument("--feat-pool-nbr", type=int, default=1)
+parser.add_argument("--z-pool-nbr", type=int, default=1)
+
+parser.add_argument("--valid-every", type=int, default=10)      # valid every train episode
+parser.add_argument("--use-cuda", type=bool, default=False)
+
+parser.add_argument("--observe-z", type=bool, default=False)
+parser.add_argument("--main-method", type=str, default="rl")
+
+args = parser.parse_args()
+
 def setup_logger(path):
     # # 创建一个控制台处理器，将日志输出到控制台
     # console_handler = logging.StreamHandler()
@@ -89,49 +134,7 @@ def gener_z(node_dim, z_nbr, z_mean):
     return z_dic
 
 
-parser = argparse.ArgumentParser()
-# log setting
-parser.add_argument("--logdir", type=str, default="")
-parser.add_argument("--logtime", type=str, default="")
-# algor setting
-parser.add_argument("--graph-pool-nbr", type=int, default=1)
-parser.add_argument("--train-graph-nbr", type=int, default=1)
-parser.add_argument("--valid-graph-nbr", type=int, default=4)
-parser.add_argument("--nodes", type=int, default=100)
-parser.add_argument("--budget", type=int, default=4)
 
-parser.add_argument("--valid-with-nature", type=bool, default=False)      # random or rl_nature, hyperparams generation way in validation
-parser.add_argument("--edge-p", type=float, default=0.1)
-parser.add_argument("--train-episodes", type=int, default=10)       # total training episodes
-parser.add_argument("--valid-episodes", type=int, default=10)       # episodes in every validation
-
-parser.add_argument("--with-nature", type=bool, default=False)
-
-parser.add_argument("--GAT-heads", type=int, default=1)
-parser.add_argument("--GAT-atten-layer", type=int, default=1)
-parser.add_argument("--GAT-out-atten-layer", type=int, default=1)
-parser.add_argument("--GAT-hid-dim", type=str, default="")
-parser.add_argument("--GAT-out-hid-dim", type=str, default="")
-
-
-parser.add_argument("--alpha", type=float, default=0.2)
-
-parser.add_argument("--seed-nbr", type=int, default=3)
-parser.add_argument("--gamma", type=float, default=0.99)
-parser.add_argument("--lr", type=float, default=1e-3)
-
-#
-parser.add_argument("--node-feat-dims", type=int, default=3)
-parser.add_argument("--feat-pool-nbr", type=int, default=1)
-parser.add_argument("--z-pool-nbr", type=int, default=1)
-
-parser.add_argument("--valid-every", type=int, default=10)      # valid every train episode
-parser.add_argument("--use-cuda", type=bool, default=False)
-
-parser.add_argument("--observe-z", type=bool, default=False)
-parser.add_argument("--main-method", type=str, default="rl")
-
-args = parser.parse_args()
 
 # env : pools
 env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
@@ -155,7 +158,8 @@ main_setting = {
     "alpha": args.alpha,
     "gamma": args.gamma,
     "lr": args.lr,
-    "rl_algor": "DQN",      # "DQN"
+    "rl_algor": "DDQN",      # "DQN"
+    "GAT_mtd": "aggre_degree", # "base': original GAT attention
     "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
     "GAT_out_atten_layer": args.GAT_out_atten_layer,
     "GAT_hid_dim": ast.literal_eval(args.GAT_hid_dim),
@@ -172,6 +176,7 @@ nature_setting = {
     "canObserve_hyper": args.observe_z,
     "canObserve_state": False,
     "nheads": args.GAT_heads,
+    "GAT_mtd": "aggre_degree",  # "base': original GAT attention
     "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
     "GAT_out_atten_layer": args.GAT_out_atten_layer,
     "GAT_hid_dim": ast.literal_eval(args.GAT_hid_dim),

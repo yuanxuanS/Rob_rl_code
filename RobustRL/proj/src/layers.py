@@ -8,19 +8,25 @@ class GraphAttentionLayer(nn.Module):
     """
     Simple GAT layer, similar to https://arxiv.org/abs/1710.10903
     """
-    def __init__(self, in_features, out_features, alpha, concat=True, mergeZ=False, node_dim=None):
+    def __init__(self, in_features, out_features, alpha, concat=True, mergeZ=False, node_dim=None, method="base"):
         super(GraphAttentionLayer, self).__init__()
 
         self.in_features = in_features
         self.out_features = out_features
         self.alpha = alpha
         self.concat = concat
+        self.method = method
 
         self.W = nn.Parameter(torch.empty(self.in_features, self.out_features))    ## W [in_f, out_f]
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
         self.a = nn.Parameter(torch.empty(size=(2*self.out_features, 1)))    ## a 权重向量 [2*out_f, 1]
         # print(f"----- a max is {self.a.max()} min is {self.a.min()}")
         nn.init.xavier_uniform_(self.a.data, gain=1.414)
+        if self.method == "aggre_degree":
+            self.W_si = nn.Parameter(torch.zeros(size=(1, 1)))
+            nn.init.xavier_uniform_(self.W_si.data, gain=1.414)
+            self.W_ei = nn.Parameter(torch.zeros(size=(1, 1)))
+            nn.init.xavier_uniform_(self.W_ei.data, gain=1.414)
 
         self.leakyrelu = nn.LeakyReLU(self.alpha)
 
@@ -34,14 +40,29 @@ class GraphAttentionLayer(nn.Module):
 
         # test
         self.print_tag = "Layers ---"
-    def forward(self, h, adj, z=None):
+    def forward(self, h, adj, s_mat, z=None):
         # print(f"{self.print_tag} -- foward --- before Wmap, h is {h} W is {self.W}")
         # print(f"{self.print_tag} adj is {adj}")
         # print(f"{self.print_tag} adj size {adj.size()}")
         Wh = torch.mm(h, self.W) # h.shape: (N, in_features), Wh.shape: (N, out_features)
+        torch.set_printoptions(profile="full")
+        # logging.debug(f" --  W \n {self.W}")
         # logging.debug(f" --  Wh \n {Wh}")
+        torch.set_printoptions(profile="default")
+
         e = self._prepare_attentional_mechanism_input(Wh, h, z)   # 注意力系数, [N, N]
         # logging.debug(f" -- e \n {e}")
+        if self.method == "base":
+            pass
+        elif self.method == "aggre_degree":
+            # s
+            # logging.debug(f"aggregate degree, \n {s_mat}")
+            s = s_mat
+            # logging.debug(f"w_ei: {self.W_ei}, w_si: {self.W_si}")
+            # logging.debug(f"before aggre s : \n {e}")
+
+            e = abs(self.W_ei) * e + abs(self.W_si) * s
+            # logging.debug(f"after aggre s : \n {e}")
 
         zero_vec = -9e15*torch.ones_like(e)
         attention = torch.where(adj > 0, e, zero_vec)       # 相邻则为e系数， 否则为负无穷 [N, N]
@@ -50,10 +71,10 @@ class GraphAttentionLayer(nn.Module):
         # logging.debug(f" -- before softmax\n {attention}")
         torch.set_printoptions(profile="default")
 
-        # attention = F.softmax(attention, dim=1)       # 要考虑degree， 所以不能softmax
+        attention = F.softmax(attention, dim=1)       # 要考虑degree
         # 去除-9e15带来的爆炸
         # attention = attention.clamp(-1e15)    # wrong 926.txt
-        attention = torch.sigmoid(attention)
+        # attention = torch.sigmoid(attention)
         torch.set_printoptions(profile="full")
         # logging.debug(f" -- after softmax \n {attention}")
         # logging.debug(f" -- after clamp \n {attention}")
@@ -63,7 +84,7 @@ class GraphAttentionLayer(nn.Module):
 
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
         torch.set_printoptions(profile="full")
-        # logging.debug(f" -- final h_prime \n {h_prime}")
+        logging.debug(f" -- final h_prime \n {h_prime}")
         torch.set_printoptions(profile="default")
         if self.concat:
             result = F.elu(h_prime)
