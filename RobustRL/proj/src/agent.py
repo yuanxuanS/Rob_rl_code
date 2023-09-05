@@ -1,4 +1,4 @@
-from models import GAT
+from models import GAT, GAT_degree
 import torch
 import numpy as np
 import random
@@ -70,10 +70,10 @@ class DQAgent:
             out_nhid_tp = hid_dim_tp[-1]
             assert out_nhid_tp[-1] == 1, "out feature of agent model must be one"
 
-            self.policy_model = GAT(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+            self.policy_model = GAT_degree(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
                                     alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
                                     use_cuda=self.use_cuda, device=self.device, method=self.method)
-            self.target_model = GAT(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+            self.target_model = GAT_degree(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
                                     alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
                                     use_cuda=self.use_cuda, device=self.device, method=self.method)
             if self.use_cuda:
@@ -232,15 +232,15 @@ class DQAgent:
                                          z=hyper.to(self.device))
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
             # print(f"{self.print_tag} infeasible action is {infeasible_action}")
-            q_target[infeasible_action] = -9e15
 
             if self.algor == "DQN":
-
+                q_target[infeasible_action] = -9e15
                 target = reward + (1 - done) * self.gamma * q_target.max()
             elif self.algor == "DDQN":
-                logging.debug(f"q target, max value is {q_target.max()}")
+                # logging.debug(f"q target, max value is {q_target.max()}")
+                q_a[infeasible_action] = -9e15                
                 policy_max_action = q_a.argmax()
-                logging.debug(f"policy max action is {policy_max_action}")
+                # logging.debug(f"policy max action is {policy_max_action}")
                 logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
                 target = reward + (1 - done) * self.gamma * q_target[policy_max_action]
 

@@ -55,11 +55,18 @@ class Graph_IM:
         # print(self.ones_1v.transpose(), self.ones_1v.transpose().shape)
         self.adm = self.degree_1v * self.ones_1v        # n, n
         # print(self.adm.shape)
-        zero_vec = -9e15*np.ones((self.node, self.node))
-        self.adm = np.where(self.adj_matrix>0, self.adm, zero_vec)
-        # print(self.adm)
+        # zero_vec = -9e15*np.ones((self.node, self.node))
+        # self.adm = np.where(self.adj_matrix>0, self.adm, zero_vec)
+        # print("before", self.adm)
+        # print(f"adj {np.array(self.adj_matrix)}")
+        self.adm *= np.array(self.adj_matrix)       # element-wise multiply
+        print("before", self.adm)
 
-        self.adm = softmax(self.adm)
+        self.adm /= self.node
+        logging.debug("after", self.adm)
+        print("after", self.adm)
+
+        # self.adm = softmax(self.adm)
         # print(self.adm)
 
         return self.adm

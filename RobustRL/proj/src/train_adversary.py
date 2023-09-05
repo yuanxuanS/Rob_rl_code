@@ -21,7 +21,7 @@ import logging
 import ast
 
 
-log_dir_global = "log_test"
+log_dir_global = "log_5"
 
 parser = argparse.ArgumentParser()
 # log setting
@@ -159,7 +159,7 @@ main_setting = {
     "gamma": args.gamma,
     "lr": args.lr,
     "rl_algor": "DDQN",      # "DQN"
-    "GAT_mtd": "aggre_degree", # "base': original GAT attention
+    "GAT_mtd": "base",  # "aggre_degree", # "base': original GAT attention
     "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
     "GAT_out_atten_layer": args.GAT_out_atten_layer,
     "GAT_hid_dim": ast.literal_eval(args.GAT_hid_dim),

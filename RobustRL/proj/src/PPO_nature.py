@@ -73,7 +73,7 @@ class GATPolicyNet(GAT):
 
         self.out_att_mu = self.out_att
 
-        self.out_att_std = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, self.mergeZ, node_num, method)
+        self.out_att_std = attentions(self.out_layer, self.nhid_tuple[-1]*nheads , self.out_nhid_tuple, self.alpha, False, self.mergeZ, node_num, method)
 
         # 映射为想要的维度， 输入 (n* 2*node_feat_dim).T
         self.mu_W = torch.nn.Parameter(torch.empty(node_num, 1))  ## W

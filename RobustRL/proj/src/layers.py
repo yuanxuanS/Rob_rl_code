@@ -63,7 +63,7 @@ class GraphAttentionLayer(nn.Module):
 
         attention = F.softmax(attention, dim=1)       # 要考虑degree
         torch.set_printoptions(profile="full")
-        logging.debug(f" --attenion: after softmax \n {attention}")
+        # logging.debug(f" --attenion: after softmax \n {attention}")
         # logging.debug(f" -- after clamp \n {attention}")
         # logging.debug(f" -- after sigmoid \n {attention}")
 
@@ -75,13 +75,13 @@ class GraphAttentionLayer(nn.Module):
             pass
         elif self.method == "aggre_degree":
             # s
-            logging.debug(f"aggregate degree, \n {s_mat}")
+            # logging.debug(f"aggregate degree, \n {s_mat}")
             s = s_mat
             # logging.debug(f"w_ei: {self.W_ei}, w_si: {self.W_si}")
             # logging.debug(f"before aggre s : \n {e}")
 
             attention = abs(self.W_ei) * attention + abs(self.W_si) * s
-            logging.debug(f"-- attention: after aggre s : \n {attention}")
+            # logging.debug(f"-- attention: after aggre s : \n {attention}")
 
         torch.set_printoptions(profile="full")
         # logging.debug(f" -- after softmax \n {attention}")
@@ -92,6 +92,7 @@ class GraphAttentionLayer(nn.Module):
 
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
         torch.set_printoptions(profile="full")
+        # logging.debug(f" curr Wh is \n {Wh}")
         logging.debug(f" -- final h_prime \n {h_prime}")
         torch.set_printoptions(profile="default")
         if self.concat:
