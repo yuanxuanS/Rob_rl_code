@@ -226,6 +226,7 @@ class DQAgent:
             q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
                                     torch.Tensor(state).to(self.device), self.s_mat,
                                     z=hyper.to(self.device))
+            q = q_a[action]
 
             q_target = self.target_model(node_feature.to(self.device), adj.to(self.device),
                                         torch.Tensor(next_state).to(self.device), self.s_mat,
@@ -238,12 +239,15 @@ class DQAgent:
                 target = reward + (1 - done) * self.gamma * q_target.max()
             elif self.algor == "DDQN":
                 # logging.debug(f"q target, max value is {q_target.max()}")
-                q_a[infeasible_action] = -9e15                
-                policy_max_action = q_a.argmax()
+                # logging.debug(f"q a, before mask: \n{q_a}")
+                q_a_tmp = q_a.clone()           # 深拷贝，不能改变原值
+                q_a_tmp[infeasible_action] = -9e15
+                # logging.debug(f"q a, after mask: \n{q_a}")
+                policy_max_action = q_a_tmp.argmax()
                 # logging.debug(f"policy max action is {policy_max_action}")
-                logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
+                # logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
                 target = reward + (1 - done) * self.gamma * q_target[policy_max_action]
-
+                # logging.debug(f"target value is {target}")
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
             # print(f"{self.print_tag} calculated target q is {target}")
@@ -257,20 +261,8 @@ class DQAgent:
             #     format="png"
             # )
             
-            q = q_a[action]
             # h = q.register_hook(self.hook)
             # self.hs.append(h)
-
-
-            # g_a = make_dot(q)
-            # g_a.render(
-            #     filename="action selected",
-            #     directory=self.path + "/logdir",
-            #     format="png"
-            # )
-
-            # logging.debug(f" q , requires_grad {q.requires_grad},")
-            # logging.debug(f" target , requires_grad {target.requires_grad}")
 
             losses  = losses + self.criterion(q, target)
         # losses_a = make_dot(losses)
@@ -293,9 +285,7 @@ class DQAgent:
         # logging.debug(f" loss , requires_grad {loss.requires_grad}, grad {loss.grad}")
         # print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
 
-
-
-
+        torch.autograd.set_detect_anomaly(True)
         # 梯度更新
         self.loss = loss
         self.optimizer.zero_grad()

@@ -60,11 +60,11 @@ class Graph_IM:
         # print("before", self.adm)
         # print(f"adj {np.array(self.adj_matrix)}")
         self.adm *= np.array(self.adj_matrix)       # element-wise multiply
-        print("before", self.adm)
+        # print("before", self.adm)
 
         self.adm /= self.node
-        logging.debug("after", self.adm)
-        print("after", self.adm)
+        # logging.debug("after", self.adm)
+        # print("after", self.adm)
 
         # self.adm = softmax(self.adm)
         # print(self.adm)

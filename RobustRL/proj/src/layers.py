@@ -47,6 +47,7 @@ class GraphAttentionLayer(nn.Module):
         Wh = torch.mm(h, self.W) # h.shape: (N, in_features), Wh.shape: (N, out_features)
         torch.set_printoptions(profile="full")
         # logging.debug(f" --  W \n {self.W}")
+        # logging.debug(f" --  h \n {h}")
         # logging.debug(f" --  Wh \n {Wh}")
         torch.set_printoptions(profile="default")
 
@@ -92,8 +93,9 @@ class GraphAttentionLayer(nn.Module):
 
         h_prime = torch.matmul(attention, Wh)       # 结合邻节点信息后，更新的特征。[N, out_f] 是邻节点才进行加权相加。
         torch.set_printoptions(profile="full")
+        # logging.debug(f" curr Wh is \n {attention}")
         # logging.debug(f" curr Wh is \n {Wh}")
-        logging.debug(f" -- final h_prime \n {h_prime}")
+        # logging.debug(f" -- final h_prime \n {h_prime}")
         torch.set_printoptions(profile="default")
         if self.concat:
             result = F.elu(h_prime)

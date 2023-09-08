@@ -9,6 +9,7 @@ from layers import GraphAttentionLayer
 import logging
 from graph import Graph_IM
 from generate_node_feature import generate_node_feature
+import math
 
 
 class S2V_QN(torch.nn.Module):
@@ -172,37 +173,82 @@ class attentions(nn.Module):
 # h_re = atten(x, adj, None)
 # print(f"final feature size {h_re.size()}")
 
+class degreeNN(nn.Module):
+    def __init__(self, n_hidden, lr=None):
+        super(degreeNN, self).__init__()
+        self.n_hidden = n_hidden
+        self.W = nn.Parameter(torch.zeros(size=(2, self.n_hidden)))
+        nn.init.xavier_uniform_(self.W.data, gain=1.414)
+        self.W0 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
+        nn.init.xavier_uniform_(self.W0.data, gain=1.414)
+        self.alpha1 = 0.2
+        self.hid_activation = nn.LeakyReLU(self.alpha1)
+
+        # output layer
+        self.V = nn.Parameter(torch.zeros(size=(self.n_hidden, 1)))
+        nn.init.xavier_uniform_(self.V.data, gain=1.414)
+        self.V0 = nn.Parameter(torch.zeros(size=(1, 1)))
+        nn.init.xavier_uniform_(self.V0.data, gain=1.414)
+        self.out_activation = nn.LeakyReLU(self.alpha1)
+
+    def forward(self, x_feat, x_deg):
+        x_ = torch.cat((x_feat, x_deg), dim=1)       # [N, 2]
+        # print(f"x_ shape {x_.shape}")
+        hid_input = torch.mm(x_, self.W) + self.W0    # [N, hid]
+        # print(f"W x_ shape {hid_input.shape}")     # [N, hid]
+        hid_output = self.hid_activation(hid_input)
+        # print(f"hidden output shape {hid_output.shape}")     # [N, hid]
+
+        #
+        out_input = torch.mm(hid_output, self.V) + self.V0    # [N, 1]
+        # print(f"output: x_ shape {out_input.shape}")     # [N, 1]
+        out_output = self.out_activation(out_input)
+        # print(f"output shape {out_output.shape}")     # [N, 1]
+        return out_output
+
+# test
+# hid = 5
+# node = 3
+# dnn = degreeNN(hid)
+# x1 = torch.ones((node, 1))
+# x2 = torch.ones((node, 1)) * 2.
+# y = dnn(x1, x2)
+# print(y)
 class GAT_degree(nn.Module):
     def __init__(self, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
         super(GAT_degree, self).__init__()
 
         self.gat = GAT(layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method)
-        self.W_e = nn.Parameter(torch.empty(1, 1))  # 大小和每个节点的feature向量一样
-        nn.init.xavier_uniform_(self.W_e.data, gain=1.414)
-        # degree feature
-        self.W_s = nn.Parameter(torch.empty(1, 1))  # 大小和每个节点的feature向量一样
-        nn.init.xavier_uniform_(self.W_s.data, gain=1.414)
+
+        self.model_v = "v2"
+        if self.model_v == "v1":
+            self.W_e = nn.Parameter(torch.empty(1, 1))  # 大小和每个节点的feature向量一样
+            nn.init.xavier_uniform_(self.W_e.data, gain=1.414)
+            # degree feature
+            self.W_s = nn.Parameter(torch.empty(1, 1))  # 大小和每个节点的feature向量一样
+            nn.init.xavier_uniform_(self.W_s.data, gain=1.414)
+        elif self.model_v == "v2":
+            self.hid = 10
+            self.dnn = degreeNN(self.hid)
+
 
     def forward(self, x, adj, observation, s_mat, z=None):
         h_ = self.gat(x, adj, observation, s_mat, z)
-        # print(f"W-e is {self.W_e}, input  feature vector is \n {h_}")
+        # print(f"input  feature vector is \n {h_}")
 
-        h_e = torch.mm(h_, abs(self.W_e))
-
-        # part 2
-        nbr = x.shape[0]
-        # s_mat *= nbr
         # logging.debug(f"number of ndoe is {nbr}, s is \n {s_mat}")
         if not isinstance(s_mat, torch.Tensor):
             s_mat = torch.Tensor(s_mat)
-        d_v = s_mat.sum(1, keepdim=True)
-        logging.debug(f"input vector about degree is \n {d_v}")
-        # print(f"W-s is {self.W_s}, input vector about degree is \n {d_v}")
-        h_s = torch.mm(d_v, abs(self.W_s))
-        # print(f"h-s is \n {h_s}")
+        d_v = s_mat.sum(1, keepdim=True).clone()
+        # logging.debug(f"input vector about degree is \n {d_v}")
+        # print(f"input vector about degree is \n {d_v}")
 
-        result = h_e + h_s
-        # print(f"result is \n {result}")
+        if self.model_v == "v1":
+            h_e = torch.mm(h_, abs(self.W_e))
+            h_s = torch.mm(d_v, abs(self.W_s))
+            result = h_e + h_s
+        elif self.model_v == "v2":
+            result = self.dnn(h_, d_v)
 
 
         return result
@@ -281,7 +327,7 @@ class GAT(nn.Module):
         # logging.debug(f"after attention layer,  x size is \n {x.size()}")
         # print(f"------ after attention layer,  x size is \n {x.size()}")
         temp = self.out_att(x, adj, s_mat, z)
-        logging.debug(f"before out elu \n {temp}")
+        # logging.debug(f"before out elu \n {temp}")
         result = F.elu(temp)
 
         # logging.debug(f"after out atten,  x size is \n {result.size()}")
@@ -313,5 +359,5 @@ class GAT(nn.Module):
 # s_mat = graph.adm
 # y = model(xv, adj_matrix, None, s_mat, None)
 # print(f"y size {y.size()}")
-#
+# #
 # print(f"get y from GAT is {y}")     # [n, 1]

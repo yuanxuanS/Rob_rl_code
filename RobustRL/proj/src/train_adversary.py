@@ -53,6 +53,7 @@ parser.add_argument("--alpha", type=float, default=0.2)
 parser.add_argument("--seed-nbr", type=int, default=3)
 parser.add_argument("--gamma", type=float, default=0.99)
 parser.add_argument("--lr", type=float, default=1e-3)
+parser.add_argument("--rl-algor", type=str, default="DQN")
 
 #
 parser.add_argument("--node-feat-dims", type=int, default=3)
@@ -158,7 +159,7 @@ main_setting = {
     "alpha": args.alpha,
     "gamma": args.gamma,
     "lr": args.lr,
-    "rl_algor": "DDQN",      # "DQN"
+    "rl_algor": args.rl_algor,      # "DQN"
     "GAT_mtd": "base",  # "aggre_degree", # "base': original GAT attention
     "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
     "GAT_out_atten_layer": args.GAT_out_atten_layer,

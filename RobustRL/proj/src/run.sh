@@ -8,8 +8,8 @@ seeds=$4
 runtime=$5
 edge_p=0.1
 
-graph_pn=2   # 106
-g_train_nbr=1   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
+graph_pn=50   # 106
+g_train_nbr=45   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
 g_valid_nbr=1
 
 
@@ -17,14 +17,15 @@ valid_with_nature=False   # valid with nature?
 valid_episodes=1
 
 glb_logfile="log_5"
-logdir="9_5"
+logdir="9_8"
 main_method="rl"    # rl
 with_nature=False
 
+rl_algor="DDQN"
 # hyper parameter of GAT
 nheads=(8)
-atten_layer=1
-hid_dim='(16, )'
+atten_layer=2
+hid_dim='(16, 8,)'
 out_atten_layer=1
 out_hid_dim='(1,)'  # final one must be 1
 alphas=(0.2)
@@ -45,6 +46,7 @@ do
            --edge-p $edge_p --main-method $main_method
           --train-episodes $episode --valid-episodes $valid_episodes
           --with-nature $with_nature
+          --rl-algor $rl_algor
           --GAT-heads $nhead
           --GAT-atten-layer $atten_layer
           --GAT-out-atten-layer $out_atten_layer
@@ -57,6 +59,7 @@ do
           --graph-pool-nbr $graph_pn --train-graph-nbr $g_train_nbr --valid-graph-nbr $g_valid_nbr
           --valid-with-nature $valid_with_nature --edge-p $edge_p --main-method $main_method
           --train-episodes $episode --valid-episodes $valid_episodes
+          --rl-algor $rl_algor
           --GAT-heads $nhead
           --GAT-atten-layer $atten_layer
           --GAT-out-atten-layer $out_atten_layer
