@@ -236,7 +236,7 @@ class DQAgent:
 
             if self.algor == "DQN":
                 q_target[infeasible_action] = -9e15
-                target = reward + (1 - done) * self.gamma * q_target.max()
+                target = reward + (1 - done) * self.gamma * q_target.detach().max()
             elif self.algor == "DDQN":
                 # logging.debug(f"q target, max value is {q_target.max()}")
                 # logging.debug(f"q a, before mask: \n{q_a}")
@@ -246,7 +246,7 @@ class DQAgent:
                 policy_max_action = q_a_tmp.argmax()
                 # logging.debug(f"policy max action is {policy_max_action}")
                 # logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
-                target = reward + (1 - done) * self.gamma * q_target[policy_max_action]
+                target = reward + (1 - done) * self.gamma * q_target[policy_max_action].detach()
                 # logging.debug(f"target value is {target}")
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
@@ -263,6 +263,8 @@ class DQAgent:
             
             # h = q.register_hook(self.hook)
             # self.hs.append(h)
+            logging.debug(f"q is {q}")
+            logging.debug(f"target is {target}")
 
             losses  = losses + self.criterion(q, target)
         # losses_a = make_dot(losses)
@@ -272,6 +274,7 @@ class DQAgent:
         #     format="png"
         # )
         logging.debug(f"losses is {losses}")
+        logging.debug(f"target is {target}")
         # loss = torch.mean(torch.tensor(losses, requires_grad=True))
         loss = losses / len(batch)
         # loss_a = make_dot(loss)
@@ -285,7 +288,7 @@ class DQAgent:
         # logging.debug(f" loss , requires_grad {loss.requires_grad}, grad {loss.grad}")
         # print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
 
-        torch.autograd.set_detect_anomaly(True)
+        # torch.autograd.set_detect_anomaly(True)
         # 梯度更新
         self.loss = loss
         self.optimizer.zero_grad()

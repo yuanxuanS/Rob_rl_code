@@ -152,7 +152,7 @@ class attentions(nn.Module):
         h = x
         for t in range(self.nlayer):
             h = self.attention[t](h, adj, s_mat, z)
-            print(f" layer {t} -- size {h.size()} ")
+            # print(f" layer {t} -- size {h.size()} ")
             # print(f"h {h}")
 
         return h
@@ -176,14 +176,27 @@ class attentions(nn.Module):
 class degreeNN(nn.Module):
     def __init__(self, n_hidden, lr=None):
         super(degreeNN, self).__init__()
+
         self.n_hidden = n_hidden
+        # hidden 1
         self.W = nn.Parameter(torch.zeros(size=(2, self.n_hidden)))
         nn.init.xavier_uniform_(self.W.data, gain=1.414)
         self.W0 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
         nn.init.xavier_uniform_(self.W0.data, gain=1.414)
         self.alpha1 = 0.2
         self.hid_activation = nn.LeakyReLU(self.alpha1)
-
+        # hidden 2
+        self.W1 = nn.Parameter(torch.zeros(size=(self.n_hidden, self.n_hidden * 2)))
+        nn.init.xavier_uniform_(self.W1.data, gain=1.414)
+        self.W01 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
+        nn.init.xavier_uniform_(self.W01.data, gain=1.414)
+        self.hid_activation1 = nn.LeakyReLU(self.alpha1)
+        # hidden 3
+        self.W2 = nn.Parameter(torch.zeros(size=(self.n_hidden *2, self.n_hidden)))
+        nn.init.xavier_uniform_(self.W2.data, gain=1.414)
+        self.W02 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
+        nn.init.xavier_uniform_(self.W02.data, gain=1.414)
+        self.hid_activation2 = nn.LeakyReLU(self.alpha1)
         # output layer
         self.V = nn.Parameter(torch.zeros(size=(self.n_hidden, 1)))
         nn.init.xavier_uniform_(self.V.data, gain=1.414)
@@ -195,12 +208,22 @@ class degreeNN(nn.Module):
         x_ = torch.cat((x_feat, x_deg), dim=1)       # [N, 2]
         # print(f"x_ shape {x_.shape}")
         hid_input = torch.mm(x_, self.W) + self.W0    # [N, hid]
-        # print(f"W x_ shape {hid_input.shape}")     # [N, hid]
+        # print(f"W1 x_ shape {hid_input.shape}")     # [N, hid]
         hid_output = self.hid_activation(hid_input)
         # print(f"hidden output shape {hid_output.shape}")     # [N, hid]
-
         #
-        out_input = torch.mm(hid_output, self.V) + self.V0    # [N, 1]
+        #hidden 2
+        hid_input1 = torch.mm(hid_output, self.W1) + self.W01  # [N, hid]
+        # print(f"h1 shape {hid_input1.shape}")     # [N, hid]
+        hid_output1 = self.hid_activation1(hid_input1)
+
+        # hidden 3
+        hid_input2 = torch.mm(hid_output1, self.W2) + self.W02  # [N, hid]
+        # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+        hid_output2 = self.hid_activation2(hid_input2)
+
+        # out
+        out_input = torch.mm(hid_output2, self.V) + self.V0    # [N, 1]
         # print(f"output: x_ shape {out_input.shape}")     # [N, 1]
         out_output = self.out_activation(out_input)
         # print(f"output shape {out_output.shape}")     # [N, 1]
@@ -340,24 +363,24 @@ class GAT(nn.Module):
         return result
 
 
-# layer = (2, 2)
-# features_dim = 3
-# hidden_dim = ((8,3,), (16, 1))
-# alpha = 0.2     # leakyReLU的alpha
-# nhead = 2
-# model = GAT_degree(layer, nfeat=features_dim, nhid_tuple=hidden_dim, alpha=alpha, nheads=nhead,
-#             mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
-# # # test
-# graph = Graph_IM(nodes=10, edges_p=0.5)
-# adj_matrix = graph.adj_matrix
-# # # print(f"graph adj matrix {graph.adj_matrix}")
-# adj_matrix = torch.Tensor(adj_matrix)
-# xv = generate_node_feature(graph, features_dim)
-# # # print(f"node feature vector size {xv.size()}")     # [0-100]
-# xv = torch.Tensor(xv)       # torch的输入必须是tensor
-#
-# s_mat = graph.adm
-# y = model(xv, adj_matrix, None, s_mat, None)
-# print(f"y size {y.size()}")
+layer = (2, 2)
+features_dim = 3
+hidden_dim = ((8,3,), (16, 1))
+alpha = 0.2     # leakyReLU的alpha
+nhead = 2
+model = GAT_degree(layer, nfeat=features_dim, nhid_tuple=hidden_dim, alpha=alpha, nheads=nhead,
+            mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
+# # test
+graph = Graph_IM(nodes=10, edges_p=0.5)
+adj_matrix = graph.adj_matrix
+# # print(f"graph adj matrix {graph.adj_matrix}")
+adj_matrix = torch.Tensor(adj_matrix)
+xv = generate_node_feature(graph, features_dim)
+# # print(f"node feature vector size {xv.size()}")     # [0-100]
+xv = torch.Tensor(xv)       # torch的输入必须是tensor
+
+s_mat = graph.adm
+y = model(xv, adj_matrix, None, s_mat, None)
+print(f"y size {y.size()}")
 # #
 # print(f"get y from GAT is {y}")     # [n, 1]
