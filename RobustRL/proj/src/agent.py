@@ -53,7 +53,7 @@ class DQAgent:
         self.train_batch_size = train_batch     # 训练网络需要的样本数量
 
         self.gamma = main_setting["gamma"]
-        self.criterion = torch.nn.MSELoss(reduction='none')
+        self.criterion = torch.nn.MSELoss(reduction='mean')
         self.copy_model_steps = update_target_steps
         self.lr = main_setting["lr"]
 
@@ -213,7 +213,8 @@ class DQAgent:
         #     h = module.register_backward_hook(self.backward_hook)
         #     self.hs.append(h)
 
-        losses = torch.tensor(0.)
+        # losses = torch.tensor(0.)
+        i = 0
         for transition in batch:
 
             state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
@@ -263,20 +264,28 @@ class DQAgent:
             
             # h = q.register_hook(self.hook)
             # self.hs.append(h)
-            logging.debug(f"q is {q}")
-            logging.debug(f"target is {target}")
+            if i == 0:
 
-            losses  = losses + self.criterion(q, target)
+                logging.debug(f"q is {q}")
+                logging.debug(f"target is {target}")
+                qs = torch.Tensor([q])
+                ts = torch.Tensor([target])
+            else:
+                qs = torch.concat((qs, q), 0)
+                ts = torch.concat((ts, target), 0)
+                # losses = losses + self.criterion(q, target)
+
+            i += 1
         # losses_a = make_dot(losses)
         # losses_a.render(
         #     filename="losses",
         #     directory=self.path + "/logdir",
         #     format="png"
         # )
-        logging.debug(f"losses is {losses}")
-        logging.debug(f"target is {target}")
+        logging.debug(f"q batch is {qs}")
+        logging.debug(f"targets is {ts}")
         # loss = torch.mean(torch.tensor(losses, requires_grad=True))
-        loss = losses / len(batch)
+        # loss = losses / len(batch)
         # loss_a = make_dot(loss)
         # loss_a.render(
         #     filename="loss",
@@ -290,6 +299,8 @@ class DQAgent:
 
         # torch.autograd.set_detect_anomaly(True)
         # 梯度更新
+        loss = self.criterion(qs, ts)
+        logging.debug(f"loss is {loss}")
         self.loss = loss
         self.optimizer.zero_grad()
         # logging.debug(f"before backward")
