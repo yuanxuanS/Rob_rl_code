@@ -46,7 +46,8 @@ parser.add_argument("--GAT-atten-layer", type=int, default=1)
 parser.add_argument("--GAT-out-atten-layer", type=int, default=1)
 parser.add_argument("--GAT-hid-dim", type=str, default="")
 parser.add_argument("--GAT-out-hid-dim", type=str, default="")
-
+parser.add_argument("--GAT-s-hid-dim", type=str, default="")
+parser.add_argument("--GAT-s-out-hid-dim", type=str, default="")
 
 parser.add_argument("--alpha", type=float, default=0.2)
 
@@ -164,7 +165,9 @@ main_setting = {
     "GAT_atten_layer": args.GAT_atten_layer,           # equal to number of GAT_hid_dim
     "GAT_out_atten_layer": args.GAT_out_atten_layer,
     "GAT_hid_dim": ast.literal_eval(args.GAT_hid_dim),
-    "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim),            # final one must be 1
+    "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim), # final one must be 1
+    "GAT_s_hid_dim": ast.literal_eval(args.GAT_s_hid_dim),
+    "GAT_s_out_hid_dim": ast.literal_eval(args.GAT_s_out_hid_dim),
 }
 
 nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)
@@ -249,7 +252,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
     elif main_setting['agent_method'] == 'random':
         model_name = 'random'
 
-    main_agent = DQAgent(graph_pool, node_feat_pool, z_pool,
+    main_agent = DQAgent(graph_pool, args.nodes, node_feat_pool, z_pool,
                          model_name,
                          main_setting,
                          env_setting["node_feat_dims"],

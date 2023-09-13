@@ -1,4 +1,4 @@
-from models import GAT, GAT_degree
+from models import GAT, GAT_degree, GAT_degree2
 import torch
 import numpy as np
 import random
@@ -18,7 +18,7 @@ torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True
 
 class DQAgent:
-    def __init__(self, graph_pool, node_feat_pool, hyper_pool, model_name,
+    def __init__(self, graph_pool, nodes, node_feat_pool, hyper_pool, model_name,
                  main_setting,
                  node_dim,
                  init_epsilon, train_batch, update_target_steps, use_cuda, device):
@@ -30,6 +30,7 @@ class DQAgent:
         self.node_feat_pool = node_feat_pool
         self.hyper_pool = hyper_pool
 
+        self.nodes = nodes
         self.graph = None
         self.adj = None
         self.z = None
@@ -66,16 +67,30 @@ class DQAgent:
 
             layer_tp = (main_setting["GAT_atten_layer"], main_setting["GAT_out_atten_layer"])
             hid_dim_tp = (main_setting["GAT_hid_dim"], main_setting["GAT_out_hid_dim"])
+            hid_s_dim_tp = (main_setting["GAT_s_hid_dim"], main_setting["GAT_s_out_hid_dim"])
 
-            out_nhid_tp = hid_dim_tp[-1]
-            assert out_nhid_tp[-1] == 1, "out feature of agent model must be one"
+            self.nnmodel = "v1"
+            if self.nnmodel == "v1":
+                out_nhid_tp = hid_dim_tp[-1]
+                # assert out_nhid_tp[-1] == 1, "out feature of agent model must be one"
 
-            self.policy_model = GAT_degree(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
-                                    alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
-                                    use_cuda=self.use_cuda, device=self.device, method=self.method)
-            self.target_model = GAT_degree(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
-                                    alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
-                                    use_cuda=self.use_cuda, device=self.device, method=self.method)
+                self.policy_model = GAT_degree(self.nodes, layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+                                        nfeat_s = self.nodes, nhid_s_tuple=hid_s_dim_tp,
+                                        alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
+                                        use_cuda=self.use_cuda, device=self.device, method=self.method)
+                self.target_model = GAT_degree(self.nodes, layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+                                        nfeat_s = self.nodes, nhid_s_tuple=hid_s_dim_tp,
+                                        alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
+                                        use_cuda=self.use_cuda, device=self.device, method=self.method)
+            elif self.nnmodel == "v2":
+                # GAT输出维度不需要是1
+                self.policy_model = GAT_degree2(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+                                               alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
+                                               use_cuda=self.use_cuda, device=self.device, method=self.method)
+                self.target_model = GAT_degree2(layer_tp, nfeat=self.node_features_dims, nhid_tuple=hid_dim_tp,
+                                               alpha=alpha, nheads=nhead, mergeZ=self.merge_z, mergeState=True,
+                                               use_cuda=self.use_cuda, device=self.device, method=self.method)
+
             if self.use_cuda:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)
@@ -266,8 +281,8 @@ class DQAgent:
             # self.hs.append(h)
             if i == 0:
 
-                logging.debug(f"q is {q}")
-                logging.debug(f"target is {target}")
+                # logging.debug(f"q is {q}")
+                # logging.debug(f"target is {target}")
                 qs = torch.Tensor([q])
                 ts = torch.Tensor([target])
             else:
@@ -282,8 +297,8 @@ class DQAgent:
         #     directory=self.path + "/logdir",
         #     format="png"
         # )
-        logging.debug(f"q batch is {qs}")
-        logging.debug(f"targets is {ts}")
+        # logging.debug(f"q batch is {qs}")
+        # logging.debug(f"targets is {ts}")
         # loss = torch.mean(torch.tensor(losses, requires_grad=True))
         # loss = losses / len(batch)
         # loss_a = make_dot(loss)
@@ -300,7 +315,7 @@ class DQAgent:
         # torch.autograd.set_detect_anomaly(True)
         # 梯度更新
         loss = self.criterion(qs, ts)
-        logging.debug(f"loss is {loss}")
+        # logging.debug(f"loss is {loss}")
         self.loss = loss
         self.optimizer.zero_grad()
         # logging.debug(f"before backward")
@@ -308,9 +323,10 @@ class DQAgent:
         #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
 
         loss.backward()
-        logging.debug(f"after backward")
+        # logging.debug(f"after backward")
         for name, param in self.policy_model.named_parameters():
-            logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+            # logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+            pass
         self.optimizer.step()
 
         for h in self.hs:
@@ -318,10 +334,10 @@ class DQAgent:
 
         # 每 C step，更新目标网络 = 当前的行为网络
         if i % self.copy_model_steps == 0:
-            logging.debug(f"reload target model, policy model params: {self.policy_model.state_dict()}\n target model param: {self.target_model.state_dict()}")
+            # logging.debug(f"reload target model, policy model params: {self.policy_model.state_dict()}\n target model param: {self.target_model.state_dict()}")
             with torch.no_grad():
-                self.target_model.load_state_dict(self.policy_model.state_dict())  # ？？ 是这样用吗
-            logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
+                self.target_model.load_state_dict(self.policy_model.state_dict())  #
+            # logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
         return self.loss
 
 

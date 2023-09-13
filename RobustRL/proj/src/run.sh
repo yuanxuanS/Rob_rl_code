@@ -9,7 +9,7 @@ runtime=$5
 edge_p=0.1
 
 graph_pn=50   # 106
-g_train_nbr=45   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
+g_train_nbr=49   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
 g_valid_nbr=1
 
 
@@ -17,7 +17,7 @@ valid_with_nature=False   # valid with nature?
 valid_episodes=1
 
 glb_logfile="log_5"
-logdir="9_9"
+logdir="9_13"
 main_method="rl"    # rl
 with_nature=False
 
@@ -26,8 +26,11 @@ rl_algor="DDQN"
 nheads=(8)
 atten_layer=2
 hid_dim='(16, 8,)'
+hid_dim_s='(16, 8,)'
 out_atten_layer=1
-out_hid_dim='(1,)'  # final one must be 1
+out_hid_dim='(4,)'  # final one must be 1 if nn model == v1
+out_hid_dim_s='(4,)'
+
 alphas=(0.2)
 gammas=(0.99)
 lrs=(1e-3)
@@ -51,7 +54,9 @@ do
           --GAT-atten-layer $atten_layer
           --GAT-out-atten-layer $out_atten_layer
           --GAT-hid-dim '$hid_dim'
+          --GAT-s-hid-dim '$hid_dim_s'
           --GAT-out-hid-dim '$out_hid_dim'
+          --GAT-s-out-hid-dim '$out_hid_dim_s'
           --alpha $alpha
           --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/${runtime}_n.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_n_error.txt &"
         else
@@ -64,7 +69,9 @@ do
           --GAT-atten-layer $atten_layer
           --GAT-out-atten-layer $out_atten_layer
           --GAT-hid-dim '$hid_dim'
+          --GAT-s-hid-dim '$hid_dim_s'
           --GAT-out-hid-dim '$out_hid_dim'
+          --GAT-s-out-hid-dim '$out_hid_dim_s'
           --alpha $alpha
           --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/$runtime.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_error.txt &"
         fi
