@@ -4,6 +4,7 @@ import utils
 import logging
 import time
 import psutil
+from torch.profiler import profile, record_function, ProfilerActivity
 logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-10s) %(message)s',
                     )

@@ -17,7 +17,7 @@ class Graph_IM:
         self.graph_type = 'powerlaw'
         if self.graph_type == 'erdos_renyi':
             self.graph = nx.erdos_renyi_graph(n=nodes, p=edges_p, seed=seed)
-        elif graph_type == 'powerlaw':
+        elif self.graph_type == 'powerlaw':
             self.graph = nx.powerlaw_cluster_graph(n=nodes, m=3, p=edges_p, seed=seed)
 
         self.graph_name = None
