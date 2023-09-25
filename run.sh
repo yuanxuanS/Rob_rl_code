@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # bash run.sh 100 4 100 3 1037
-set -vx
+# set -vx
 nodes=$1
 budget=$2
 episode=$3
 seeds=$4
 runtime=$5
-edge_p=0.1
+edge_p=0.05
 
 graph_pn=2   # 106
 g_train_nbr=1   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
@@ -34,7 +34,7 @@ out_hid_dim_s='(1,)'
 
 alphas=(0.2)
 gammas=(0.99)
-lrs=(1e-4)
+lrs=(1e-3)
 batch_size=8
 
 for nhead in ${nheads[@]}
