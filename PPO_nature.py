@@ -546,7 +546,7 @@ class PPOContinuousAgent:
                                             observe_state=self.observe_state, use_cuda=self.use_cuda,
                                             device=self.device,
                                             method=self.method)  # 从n个中随意选一个分布
-            elif self.nnmodel == "v4" or self.nnmodel == "v01":
+            elif (self.nnmodel == "v4") or (self.nnmodel == "v01") or (self.nnmodel == "v0"):
 
                 self.critic = GATValueNet(self.node_nbr, layer_tp, self.node_features_dims + self.node_nbr, hid_dim_tp, alpha,
                                           nhead, mergeZ=self.merge_z,
@@ -572,10 +572,10 @@ class PPOContinuousAgent:
 
             print("PPO- actor architecture")
             # summary(self.actor, ((self.node_nbr, self.node_features_dims), (self.node_nbr, self.node_nbr)))
-            print(self.actor)
+            # print(self.actor)
             print("PPO- critic architecture")
             # summary(self.critic, ((self.node_nbr, self.node_features_dims), (self.node_nbr, self.node_nbr)))
-            print(self.critic)
+            # print(self.critic)
 
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(), lr=self.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(), lr=self.critic_lr)

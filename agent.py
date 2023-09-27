@@ -108,6 +108,12 @@ class DQAgent:
                         layer_type="default")
                 self.target_model = GAT_origin(self.node_features_dims, 8, 0, 32, self.nodes, 0, alpha=alpha,
                                                nheads=nhead, layer_type="default")
+            elif self.nnmodel == "v0":
+                self.policy_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha, nheads=nhead,
+                        layer_type="default")
+                self.target_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha,
+                                               nheads=nhead, layer_type="default")
+
 
             if self.use_cuda:
                 self.policy_model.to(self.device)
@@ -173,6 +179,9 @@ class DQAgent:
 
                 if self.nnmodel == "v4":
                     input_node_feat = torch.concat((input_node_feat, self.s_mat), 1)
+                if self.nnmodel == "v0":
+                    input_node_feat = observation.T
+                    logging.debug(f"input node feature size of v0 is {input_node_feat}")
 
                 with profile(activities=[ProfilerActivity.CPU],
                             profile_memory=True, record_shapes=True) as prof:
@@ -182,6 +191,11 @@ class DQAgent:
                                                 z=self.z.to(self.device))
                         q_a = torch.squeeze(q_a, dim=0)
                         logging.debug(f"v01 q size is {q_a.size()}")
+                    elif self.nnmodel == "v0":
+                        input_node_feat = input_node_feat[None, ...]
+                        if not isinstance(input_node_feat, torch.Tensor):
+                            input_node_feat = torch.Tensor(input_node_feat)
+                        q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device))
                     else:
 
                         q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
@@ -193,6 +207,9 @@ class DQAgent:
                 
                 if self.use_cuda:
                     q_a = q_a.cpu()
+                if self.nnmodel == "v0":
+                    q_a = torch.squeeze(q_a, dim=0)
+
                 infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
                 # print(f"{self.print_tag} infeasible action is {infeasible_action}")
 
@@ -272,28 +289,45 @@ class DQAgent:
 
             if not isinstance(self.s_mat, torch.Tensor):
                 self.s_mat = torch.Tensor(self.s_mat)
-            if self.nnmodel == "v4":
-                logging.debug(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
-                node_feature = torch.concat((node_feature, self.s_mat), 1)
             
-            q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
-                                    torch.Tensor(state).to(self.device), self.s_mat,
-                                    z=hyper.to(self.device))
+            if self.nnmodel == "v0":
+                node_feature = state.T
+                # logging.debug(f" node feature size of v0 is {node_feature.size()}")
+            
+            if self.nnmodel == "v0":
+                if not isinstance(node_feature, torch.Tensor):
+                    node_feature = torch.Tensor(node_feature)
+                node_feature = node_feature[None, ...]
+                q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device))
+            else:
+                if self.nnmodel == "v4":
+                    logging.debug(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
+                    node_feature = torch.concat((node_feature, self.s_mat), 1)
+                q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                        torch.Tensor(state).to(self.device), self.s_mat,
+                                        z=hyper.to(self.device))
 
-            if self.nnmodel == "v01": # 该网络输出第一个维度是batchsizw
+            if self.nnmodel == "v01" or self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
                 
                 q_a = torch.squeeze(q_a, dim=0)
                 logging.debug(f"v01 q size is {q_a.size()}")
             
+
             q = q_a[action]
 
-            
-            q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
-                                    torch.Tensor(next_state).to(self.device), self.s_mat,
-                                    z=hyper.to(self.device))
+            if self.nnmodel == "v0":
+                next_s = next_state.T
+                if not isinstance(next_s, torch.Tensor):
+                    next_s = torch.Tensor(next_s)
+                next_s = next_s[None, ...]
+                q_target = self.target_model(next_s.to(self.device), adj.to(self.device))
+            else:
+                q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
+                                        torch.Tensor(next_state).to(self.device), self.s_mat,
+                                        z=hyper.to(self.device))
 
-            if self.nnmodel == "v01":
-                q_a = torch.squeeze(q_target, dim=0)
+            if self.nnmodel == "v01" or self.nnmodel == "v0":
+                q_target = torch.squeeze(q_target, dim=0)
                 logging.debug(f"v01 q target size is {q_target.size()}")
             
             # logging.debug(f"target nn is {q_target}")
