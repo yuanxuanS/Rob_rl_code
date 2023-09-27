@@ -157,7 +157,7 @@ env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
 
 # main agent 's training settings
 main_setting = {
-    "agent_method": args.main_method,  # rl
+    "agent_method": args.main_method,  # rl / random
     "observe_z": args.observe_z,
     "batch_size": args.batch_size,
     "nheads": args.GAT_heads,

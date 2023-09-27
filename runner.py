@@ -102,10 +102,12 @@ class Runner:
     def train(self):
 
         self.test_mem = True
-
+        self.test_time = True
         for episode in range(self.training_setting["train_episodes"]):  # one-step, adversary is a bandit
             self.global_iter += 1
-            epi_st = time.time()
+
+            if self.test_time:
+                epi_st = time.time()
             # sample graph
             g_id = random.randint(0, self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] - 1)
             self.environment.init_graph(g_id)
@@ -131,6 +133,10 @@ class Runner:
             #
             self.environment.reset()
             logging.debug(f"Now reset env, state is \n {self.environment.state}")
+
+            if self.test_time:
+                print(f"initial time is {time.time() - epi_st}")
+
             if self.training_setting["with_nature"]:
                 logging.debug(f"current train with nature")
                 self.nature.reset()
@@ -143,11 +149,15 @@ class Runner:
                 logging.debug(f"updating env hyperparameter, current hyperparam is \n {self.environment.z}")
 
             # after adversary change environment z, get best solution
-            grd_st = time.time()
+            if self.test_time:
+                grd_st = time.time()
             best_s, best_reward = self.environment.greedy_solution()
-            grd_ed = time.time()
-            print(f"time of greedy computation is {grd_ed - grd_st}")
 
+            if self.test_time:
+                grd_ed = time.time()
+                print(f"time of greedy computation is {grd_ed - grd_st}")
+
+                agent_st = time.time()
             logging.debug(f"best seed set is {best_s}, best reward is {best_reward}")
             # main agent
             self.agent.reset()
@@ -159,6 +169,9 @@ class Runner:
 
             for i in range(self.environment.budget):
                 logging.debug(f"---------- sub step {i}")
+    
+                if self.test_time:
+                    this_st = time.time()
                 if self.test_mem:
                     self.test_memory()
 
@@ -170,21 +183,30 @@ class Runner:
                 infeasible_action = [k for k in range(self.agent.graph.node) if k not in feasible_action]
                 logging.debug(f"return infeasible action")
 
-                act_st = time.time()
+                if self.test_time:
+                    print(f"time before act in a episode {time.time() - this_st}")
+                    act_st = time.time()
+
                 action = self.agent.act(state, feasible_action, "train")
+
                 if self.test_mem:
                     self.test_memory()
 
-                act_ed = time.time()
-                print(f"time of agent act is {act_ed - act_st}")
+                if self.test_time:
+                    act_ed = time.time()
+                    print(f"time of agent act is {act_ed - act_st}")
+                    step_st = time.time()
 
                 logging.debug(f"curr seed set is {infeasible_action}, main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
 
-                step_st = time.time()
+                
                 next_state, reward, done = self.environment.step_seed(i, action)
                 logging.debug(f"get reward is {reward}")
-                step_ed = time.time()
-                print(f"time of env step(simulation) is {step_ed - step_st}")
+
+                if self.test_time:
+                    step_ed = time.time()
+                    print(f"time of env step(simulation) is {step_ed - step_st}")
+                    last_st = time.time()
 
                 feasible_action.remove(action)
 
@@ -217,9 +239,15 @@ class Runner:
                         self.test_memory()
                 print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
 
+                if self.test_time:
+                    print(f"time of last after update is {time.time() - last_st}")
+            
+            if self.test_time:
+                print(f"agent part time is {time.time() - agent_st}")
+                record_st = time.time()
+
             logging.debug(f"after budget selection, main agent's return is {cumul_reward}, overall loss is {sub_loss}")
             self.cumu_reward.append(cumul_reward)
-
 
             # print(f"cumulative reward is {cumul_reward}")
             # plot
@@ -236,8 +264,6 @@ class Runner:
             # self.nature_critic_loss.append(cri_loss_nature.item())
             # self.nature_actor_loss.append(act_loss_nature.item())
 
-            epi_ed = time.time()
-            print(f"time of an training episode is {epi_ed - epi_st}")
             self.writer.add_scalar(
                 f'main/GPU={self.device_setting["use_cuda"]}/nature={self.training_setting["with_nature"]}/cumulative reward per episode',
                 cumul_reward, self.global_iter)
@@ -254,8 +280,12 @@ class Runner:
                                   self.global_iter)
                 self.writer.add_scalar(f'nature/GPU={self.device_setting["use_cuda"]}/critic loss ', cri_loss_nature.item(),
                                   self.global_iter)
+            
+            if self.test_time:
+                print(f"last record in tensorboard time is {time.time() - record_st}")
+                print(f"time of an training episode is {time.time() - epi_st}")
 
-        utils.draw_distri_hist(self.cumu_reward, self.path, "cumu_reward")
+        # utils.draw_distri_hist(self.cumu_reward, self.path, "cumu_reward")
 
     def final_valid(self):
         # validation at the end
