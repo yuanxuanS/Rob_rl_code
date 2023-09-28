@@ -216,6 +216,116 @@ class attentions_struc(nn.Module):
 # h_re = atten(x, adj, x_struc, None)
 # print(f"final feature size {h_re.size()}")
 
+class MLP(nn.Module):
+    def __init__(self, nlayer, n_hidden, input_dim, out_dim):
+        super(MLP, self).__init__()
+
+        self.nlayer = nlayer
+        self.n_hidden = n_hidden
+        # hidden 1
+        self.W = nn.Parameter(torch.zeros(size=(input_dim, self.n_hidden)))
+        nn.init.xavier_uniform_(self.W.data, gain=1.414)
+        self.W0 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
+        nn.init.xavier_uniform_(self.W0.data, gain=1.414)
+        self.alpha1 = 0.2
+        self.hid_activation = nn.LeakyReLU(self.alpha1)
+        # hidden 2
+        self.W1 = nn.Parameter(torch.zeros(size=(self.n_hidden, self.n_hidden * 2)))
+        nn.init.xavier_uniform_(self.W1.data, gain=1.414)
+        self.W01 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
+        nn.init.xavier_uniform_(self.W01.data, gain=1.414)
+        self.hid_activation1 = nn.LeakyReLU(self.alpha1)
+        # hidden 3
+        self.W2 = nn.Parameter(torch.zeros(size=(self.n_hidden *2, self.n_hidden * 2)))
+        nn.init.xavier_uniform_(self.W2.data, gain=1.414)
+        self.W02 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
+        nn.init.xavier_uniform_(self.W02.data, gain=1.414)
+        self.hid_activation2 = nn.LeakyReLU(self.alpha1)
+
+        if nlayer == 6:
+            # hidden 4
+            self.W3 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden * 2)))
+            nn.init.xavier_uniform_(self.W3.data, gain=1.414)
+            self.W03 = nn.Parameter(torch.zeros(size=(1, self.n_hidden *2)))
+            nn.init.xavier_uniform_(self.W03.data, gain=1.414)
+            self.hid_activation3 = nn.LeakyReLU(self.alpha1)
+            # hidden 5
+            self.W4 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden * 2)))
+            nn.init.xavier_uniform_(self.W4.data, gain=1.414)
+            self.W04 = nn.Parameter(torch.zeros(size=(1, self.n_hidden *2)))
+            nn.init.xavier_uniform_(self.W04.data, gain=1.414)
+            self.hid_activation4 = nn.LeakyReLU(self.alpha1)
+            # hidden 6
+            self.W5 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden)))
+            nn.init.xavier_uniform_(self.W5.data, gain=1.414)
+            self.W05 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
+            nn.init.xavier_uniform_(self.W05.data, gain=1.414)
+            self.hid_activation5 = nn.LeakyReLU(self.alpha1)
+
+            # output layer
+            self.V = nn.Parameter(torch.zeros(size=(self.n_hidden, 1)))
+            nn.init.xavier_uniform_(self.V.data, gain=1.414)
+        elif nlayer == 3:
+            # output layer
+            self.V = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, out_dim)))
+            nn.init.xavier_uniform_(self.V.data, gain=1.414)
+
+        self.V0 = nn.Parameter(torch.zeros(size=(1, out_dim)))
+        nn.init.xavier_uniform_(self.V0.data, gain=1.414)
+        self.out_activation = nn.LeakyReLU(self.alpha1)
+
+    def forward(self, x_feat):
+        x_ = x_feat
+        # print(f"x_ shape {x_.shape}")
+        hid_input = torch.mm(x_, self.W) + self.W0    # [N, hid]
+        # print(f"W1 x_ shape {hid_input.shape}")     # [N, hid]
+        hid_output = self.hid_activation(hid_input)
+        # print(f"hidden output shape {hid_output.shape}")     # [N, hid]
+        #
+        #hidden 2
+        hid_input1 = torch.mm(hid_output, self.W1) + self.W01  # [N, hid]
+        # print(f"h1 shape {hid_input1.shape}")     # [N, hid]
+        hid_output1 = self.hid_activation1(hid_input1)
+
+        # hidden 3
+        hid_input2 = torch.mm(hid_output1, self.W2) + self.W02  # [N, hid]
+        # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+        hid_output2 = self.hid_activation2(hid_input2)
+
+        if self.nlayer == 6:
+            # hidden 4
+            hid_input3 = torch.mm(hid_output2, self.W3) + self.W03  # [N, hid]
+            # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+            hid_output3 = self.hid_activation3(hid_input3)
+
+            # hidden 5
+            hid_input4 = torch.mm(hid_output3, self.W4) + self.W04  # [N, hid]
+            # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+            hid_output4 = self.hid_activation4(hid_input4)
+
+            # hidden 6
+            hid_input5 = torch.mm(hid_output4, self.W5) + self.W05  # [N, hid]
+            # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+            hid_output5 = self.hid_activation5(hid_input5)
+
+            # out
+            out_input = torch.mm(hid_output5, self.V) + self.V0    # [N, 1]
+        elif self.nlayer == 3:
+            # out
+            out_input = torch.mm(hid_output2, self.V) + self.V0  # [N, 1]
+        # print(f"output: x_ shape {out_input.shape}")     # [N, 1]
+        out_output = self.out_activation(out_input)
+        # print(f"output shape {out_output.shape}")     # [N, 1]
+        return out_output
+
+# test
+# hid = 5
+# node = 3
+# dnn = MLP(3, hid, 1, 2)
+# x1 = torch.ones((node, 1))
+# y = dnn(x1)
+# print(y)
+
 class aggreMLP(nn.Module):
     def __init__(self, nlayer, n_hidden, input_dim, out_dim, lr=None):
         super(aggreMLP, self).__init__()
@@ -317,6 +427,7 @@ class aggreMLP(nn.Module):
         out_output = self.out_activation(out_input)
         # print(f"output shape {out_output.shape}")     # [N, 1]
         return out_output
+
 
 # test
 # hid = 5
@@ -482,7 +593,7 @@ class GAT(nn.Module):
         self.print_tag = "Models ---"
 
 
-    def forward(self, x, adj, observation, s_mat, z=None):
+    def forward(self, x, adj, observation, s_mat=None, z=None):
 
         if not isinstance(x, torch.Tensor):
             x = torch.Tensor(x)
@@ -635,6 +746,48 @@ class GAT_struc(nn.Module):
 #
 # s_mat = graph.adm
 # y = model(xv, adj_matrix, None, s_mat, None)
+# print(f"y size {y.size()}")
+
+# print(f"get y from GAT is {y}")     # [n, 1]
+
+class GAT_MLP(nn.Module):
+    def __init__(self, mlp_layers, nhid, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
+        super(GAT_MLP, self).__init__()
+
+        self.gat = GAT(layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method)
+        self.hid = nhid
+        self.input_dims = nhid_tuple[1][-1]       
+        self.mlp = MLP(mlp_layers, self.hid, self.input_dims, 1)
+
+    def forward(self, x, adj, observation, z=None):
+        h_ = self.gat(x, adj, observation, None, z)
+        h = self.mlp(h_)
+
+        return h
+
+# layer = (2, 2)
+# features_dim = 3
+# hidden_dim = ((8,3,), (16, 5))
+# alpha = 0.2     # leakyReLU的alpha
+# nhead = 2
+# node_nbr = 10
+# graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
+
+# mlp_layer = 3
+# mlp_hid = 10
+# model = GAT_MLP(mlp_layer, mlp_hid, layer, nfeat=features_dim, nhid_tuple=hidden_dim, 
+            # alpha=alpha, nheads=nhead,
+            # mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
+# # # # test
+#
+# adj_matrix = graph.adj_matrix
+# # # print(f"graph adj matrix {graph.adj_matrix}")
+# adj_matrix = torch.Tensor(adj_matrix)
+# xv = generate_node_feature(graph, features_dim)
+# xv = torch.Tensor(xv)       # torch的输入必须是tensor
+# print(f"node feature vector size {xv.size()}")     # [0-100]
+#
+# y = model(xv, adj_matrix, None, None)
 # print(f"y size {y.size()}")
 
 # print(f"get y from GAT is {y}")     # [n, 1]

@@ -132,7 +132,7 @@ class Runner:
 
             #
             self.environment.reset()
-            logging.debug(f"Now reset env, state is \n {self.environment.state}")
+            # logging.debug(f"Now reset env, state is \n {self.environment.state}")
 
             if self.test_time:
                 print(f"initial time is {time.time() - epi_st}")

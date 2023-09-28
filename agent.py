@@ -1,4 +1,4 @@
-from models import GAT, GAT_degree, GAT_degree2, GAT_origin
+from models import GAT, GAT_degree, GAT_degree2, GAT_origin, GAT_MLP
 import torch
 import numpy as np
 import random
@@ -104,10 +104,13 @@ class DQAgent:
                                         alpha, nhead, self.merge_z, True,
                                         self.use_cuda, self.device, method=self.method)
             elif self.nnmodel == "v01":
-                self.policy_model = GAT_origin(self.node_features_dims, 8, 0, 32, self.nodes, 0, alpha=alpha, nheads=nhead,
-                        layer_type="default")
-                self.target_model = GAT_origin(self.node_features_dims, 8, 0, 32, self.nodes, 0, alpha=alpha,
-                                               nheads=nhead, layer_type="default")
+                mlp_layer = 3
+                mlp_hid = 10
+                self.policy_model = GAT_MLP(mlp_layer, mlp_hid, layer_tp, self.node_features_dims,
+                                    hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
+                self.target_model = GAT_MLP(mlp_layer, mlp_hid, layer_tp, self.node_features_dims,
+                                    hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
+
             elif self.nnmodel == "v0":
                 self.policy_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha, nheads=nhead,
                         layer_type="default")
@@ -187,9 +190,8 @@ class DQAgent:
                 #             profile_memory=True, record_shapes=True) as prof:
                 if self.nnmodel == "v01":
                     q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
-                                            torch.Tensor(observation).to(self.device), self.s_mat,
+                                            torch.Tensor(observation).to(self.device), None,
                                             z=self.z.to(self.device))
-                    q_a = torch.squeeze(q_a, dim=0)
                     logging.debug(f"v01 q size is {q_a.size()}")
                 elif self.nnmodel == "v0":
                     input_node_feat = input_node_feat[None, ...]
@@ -239,7 +241,9 @@ class DQAgent:
         self.memory.append(sample_lst)
 
     def get_sample(self):
-        self.train_batch_size = int((1 + len(self.memory) / self.buffer_max) * self.basic_batch_size)
+
+        # self.train_batch_size = int((1 + len(self.memory) / self.buffer_max) * self.basic_batch_size)
+        self.train_batch_size = self.basic_batch_size
 
         if len(self.memory) > self.train_batch_size:
 
@@ -304,10 +308,10 @@ class DQAgent:
                     logging.debug(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
                     node_feature = torch.concat((node_feature, self.s_mat), 1)
                 q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
-                                        torch.Tensor(state).to(self.device), self.s_mat,
+                                        torch.Tensor(state).to(self.device), None,
                                         z=hyper.to(self.device))
 
-            if self.nnmodel == "v01" or self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
+            if self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
                 
                 q_a = torch.squeeze(q_a, dim=0)
                 logging.debug(f"v01 q size is {q_a.size()}")
@@ -323,12 +327,12 @@ class DQAgent:
                 q_target = self.target_model(next_s.to(self.device), adj.to(self.device))
             else:
                 q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
-                                        torch.Tensor(next_state).to(self.device), self.s_mat,
+                                        torch.Tensor(next_state).to(self.device), None,
                                         z=hyper.to(self.device))
 
-            if self.nnmodel == "v01" or self.nnmodel == "v0":
+            if self.nnmodel == "v0":
                 q_target = torch.squeeze(q_target, dim=0)
-                logging.debug(f"v01 q target size is {q_target.size()}")
+                logging.debug(f"v0 q target size is {q_target.size()}")
             
             # logging.debug(f"target nn is {q_target}")
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
