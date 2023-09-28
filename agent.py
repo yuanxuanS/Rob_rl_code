@@ -183,26 +183,26 @@ class DQAgent:
                     input_node_feat = observation.T
                     logging.debug(f"input node feature size of v0 is {input_node_feat}")
 
-                with profile(activities=[ProfilerActivity.CPU],
-                            profile_memory=True, record_shapes=True) as prof:
-                    if self.nnmodel == "v01":
-                        q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
-                                                torch.Tensor(observation).to(self.device), self.s_mat,
-                                                z=self.z.to(self.device))
-                        q_a = torch.squeeze(q_a, dim=0)
-                        logging.debug(f"v01 q size is {q_a.size()}")
-                    elif self.nnmodel == "v0":
-                        input_node_feat = input_node_feat[None, ...]
-                        if not isinstance(input_node_feat, torch.Tensor):
-                            input_node_feat = torch.Tensor(input_node_feat)
-                        q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device))
-                    else:
+                # with profile(activities=[ProfilerActivity.CPU],
+                #             profile_memory=True, record_shapes=True) as prof:
+                if self.nnmodel == "v01":
+                    q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
+                                            torch.Tensor(observation).to(self.device), self.s_mat,
+                                            z=self.z.to(self.device))
+                    q_a = torch.squeeze(q_a, dim=0)
+                    logging.debug(f"v01 q size is {q_a.size()}")
+                elif self.nnmodel == "v0":
+                    input_node_feat = input_node_feat[None, ...]
+                    if not isinstance(input_node_feat, torch.Tensor):
+                        input_node_feat = torch.Tensor(input_node_feat)
+                    q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device))
+                else:
 
-                        q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
-                                                torch.Tensor(observation).to(self.device), self.s_mat,
-                                                z=self.z.to(self.device))
-                    logging.debug(f" get policy done , action")
-                print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
+                    q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
+                                            torch.Tensor(observation).to(self.device), self.s_mat,
+                                            z=self.z.to(self.device))
+                logging.debug(f" get policy done , action")
+                # print(prof.key_averages().table(sort_by="self_cpu_memory_usage"))
 
                 
                 if self.use_cuda:

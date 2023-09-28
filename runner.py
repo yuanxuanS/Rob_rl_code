@@ -221,23 +221,26 @@ class Runner:
                 cumul_reward += reward
                 sub_reward.append(reward)
 
-                # get sample and update the main model, GAT
-                with profile(activities=[ProfilerActivity.CPU],
-                            profile_memory=True, record_shapes=True) as prof:
-                    if self.main_setting["agent_method"] == "rl":
-                        logging.debug(f"now update the main agent")
+                # # get sample and update the main model, GAT
+                # with profile(activities=[ProfilerActivity.CPU],
+                #             profile_memory=True, record_shapes=True) as prof:
+                if self.main_setting["agent_method"] == "rl":
+                    logging.debug(f"now update the main agent")
+                    if self.test_time:
                         upd_st = time.time()
-                        loss = self.agent.update(i)
+                    loss = self.agent.update(i)
+
+                    if self.test_time:
                         upd_ed = time.time()
                         print(f"time of update is {upd_ed - upd_st}")
-                        logging.debug(f"after main agent update, get loss :{loss}")
-                        self.main_loss.append(loss)
-                        sub_loss += loss
-                    elif self.main_setting["agent_method"] == "random":
-                        pass
-                    if self.test_mem:
-                        self.test_memory()
-                print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
+                    logging.debug(f"after main agent update, get loss :{loss}")
+                    self.main_loss.append(loss)
+                    sub_loss += loss
+                elif self.main_setting["agent_method"] == "random":
+                    pass
+                if self.test_mem:
+                    self.test_memory()
+                # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
 
                 if self.test_time:
                     print(f"time of last after update is {time.time() - last_st}")
