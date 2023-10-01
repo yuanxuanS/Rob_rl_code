@@ -104,7 +104,7 @@ class DQAgent:
                                         alpha, nhead, self.merge_z, True,
                                         self.use_cuda, self.device, method=self.method)
             elif self.nnmodel == "v01":
-                mlp_layer = 3
+                mlp_layer = 1
                 mlp_hid = 10
                 self.policy_model = GAT_MLP(mlp_layer, mlp_hid, layer_tp, self.node_features_dims,
                                     hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)

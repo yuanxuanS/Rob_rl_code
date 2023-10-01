@@ -229,45 +229,50 @@ class MLP(nn.Module):
         nn.init.xavier_uniform_(self.W0.data, gain=1.414)
         self.alpha1 = 0.2
         self.hid_activation = nn.LeakyReLU(self.alpha1)
-        # hidden 2
-        self.W1 = nn.Parameter(torch.zeros(size=(self.n_hidden, self.n_hidden * 2)))
-        nn.init.xavier_uniform_(self.W1.data, gain=1.414)
-        self.W01 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
-        nn.init.xavier_uniform_(self.W01.data, gain=1.414)
-        self.hid_activation1 = nn.LeakyReLU(self.alpha1)
-        # hidden 3
-        self.W2 = nn.Parameter(torch.zeros(size=(self.n_hidden *2, self.n_hidden * 2)))
-        nn.init.xavier_uniform_(self.W2.data, gain=1.414)
-        self.W02 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
-        nn.init.xavier_uniform_(self.W02.data, gain=1.414)
-        self.hid_activation2 = nn.LeakyReLU(self.alpha1)
+        if nlayer > 1:
+            # hidden 2
+            self.W1 = nn.Parameter(torch.zeros(size=(self.n_hidden, self.n_hidden * 2)))
+            nn.init.xavier_uniform_(self.W1.data, gain=1.414)
+            self.W01 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
+            nn.init.xavier_uniform_(self.W01.data, gain=1.414)
+            self.hid_activation1 = nn.LeakyReLU(self.alpha1)
+            # hidden 3
+            self.W2 = nn.Parameter(torch.zeros(size=(self.n_hidden *2, self.n_hidden * 2)))
+            nn.init.xavier_uniform_(self.W2.data, gain=1.414)
+            self.W02 = nn.Parameter(torch.zeros(size=(1, self.n_hidden * 2)))
+            nn.init.xavier_uniform_(self.W02.data, gain=1.414)
+            self.hid_activation2 = nn.LeakyReLU(self.alpha1)
 
-        if nlayer == 6:
-            # hidden 4
-            self.W3 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden * 2)))
-            nn.init.xavier_uniform_(self.W3.data, gain=1.414)
-            self.W03 = nn.Parameter(torch.zeros(size=(1, self.n_hidden *2)))
-            nn.init.xavier_uniform_(self.W03.data, gain=1.414)
-            self.hid_activation3 = nn.LeakyReLU(self.alpha1)
-            # hidden 5
-            self.W4 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden * 2)))
-            nn.init.xavier_uniform_(self.W4.data, gain=1.414)
-            self.W04 = nn.Parameter(torch.zeros(size=(1, self.n_hidden *2)))
-            nn.init.xavier_uniform_(self.W04.data, gain=1.414)
-            self.hid_activation4 = nn.LeakyReLU(self.alpha1)
-            # hidden 6
-            self.W5 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden)))
-            nn.init.xavier_uniform_(self.W5.data, gain=1.414)
-            self.W05 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
-            nn.init.xavier_uniform_(self.W05.data, gain=1.414)
-            self.hid_activation5 = nn.LeakyReLU(self.alpha1)
+            if nlayer > 3:
+                # hidden 4
+                self.W3 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden * 2)))
+                nn.init.xavier_uniform_(self.W3.data, gain=1.414)
+                self.W03 = nn.Parameter(torch.zeros(size=(1, self.n_hidden *2)))
+                nn.init.xavier_uniform_(self.W03.data, gain=1.414)
+                self.hid_activation3 = nn.LeakyReLU(self.alpha1)
+                # hidden 5
+                self.W4 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden * 2)))
+                nn.init.xavier_uniform_(self.W4.data, gain=1.414)
+                self.W04 = nn.Parameter(torch.zeros(size=(1, self.n_hidden *2)))
+                nn.init.xavier_uniform_(self.W04.data, gain=1.414)
+                self.hid_activation4 = nn.LeakyReLU(self.alpha1)
+                # hidden 6
+                self.W5 = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, self.n_hidden)))
+                nn.init.xavier_uniform_(self.W5.data, gain=1.414)
+                self.W05 = nn.Parameter(torch.zeros(size=(1, self.n_hidden)))
+                nn.init.xavier_uniform_(self.W05.data, gain=1.414)
+                self.hid_activation5 = nn.LeakyReLU(self.alpha1)
 
+                # output layer
+                self.V = nn.Parameter(torch.zeros(size=(self.n_hidden, 1)))
+                nn.init.xavier_uniform_(self.V.data, gain=1.414)
+            elif nlayer == 3:
+                # output layer
+                self.V = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, out_dim)))
+                nn.init.xavier_uniform_(self.V.data, gain=1.414)
+        elif nlayer == 1:
             # output layer
             self.V = nn.Parameter(torch.zeros(size=(self.n_hidden, 1)))
-            nn.init.xavier_uniform_(self.V.data, gain=1.414)
-        elif nlayer == 3:
-            # output layer
-            self.V = nn.Parameter(torch.zeros(size=(self.n_hidden * 2, out_dim)))
             nn.init.xavier_uniform_(self.V.data, gain=1.414)
 
         self.V0 = nn.Parameter(torch.zeros(size=(1, out_dim)))
@@ -282,37 +287,41 @@ class MLP(nn.Module):
         hid_output = self.hid_activation(hid_input)
         # print(f"hidden output shape {hid_output.shape}")     # [N, hid]
         #
-        #hidden 2
-        hid_input1 = torch.mm(hid_output, self.W1) + self.W01  # [N, hid]
-        # print(f"h1 shape {hid_input1.shape}")     # [N, hid]
-        hid_output1 = self.hid_activation1(hid_input1)
 
-        # hidden 3
-        hid_input2 = torch.mm(hid_output1, self.W2) + self.W02  # [N, hid]
-        # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
-        hid_output2 = self.hid_activation2(hid_input2)
+        if self.nlayer > 1:
+            #hidden 2
+            hid_input1 = torch.mm(hid_output, self.W1) + self.W01  # [N, hid]
+            # print(f"h1 shape {hid_input1.shape}")     # [N, hid]
+            hid_output1 = self.hid_activation1(hid_input1)
 
-        if self.nlayer == 6:
-            # hidden 4
-            hid_input3 = torch.mm(hid_output2, self.W3) + self.W03  # [N, hid]
+            # hidden 3
+            hid_input2 = torch.mm(hid_output1, self.W2) + self.W02  # [N, hid]
             # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
-            hid_output3 = self.hid_activation3(hid_input3)
+            hid_output2 = self.hid_activation2(hid_input2)
 
-            # hidden 5
-            hid_input4 = torch.mm(hid_output3, self.W4) + self.W04  # [N, hid]
-            # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
-            hid_output4 = self.hid_activation4(hid_input4)
+            if self.nlayer > 3:
+                # hidden 4
+                hid_input3 = torch.mm(hid_output2, self.W3) + self.W03  # [N, hid]
+                # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+                hid_output3 = self.hid_activation3(hid_input3)
 
-            # hidden 6
-            hid_input5 = torch.mm(hid_output4, self.W5) + self.W05  # [N, hid]
-            # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
-            hid_output5 = self.hid_activation5(hid_input5)
+                # hidden 5
+                hid_input4 = torch.mm(hid_output3, self.W4) + self.W04  # [N, hid]
+                # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+                hid_output4 = self.hid_activation4(hid_input4)
 
-            # out
-            out_input = torch.mm(hid_output5, self.V) + self.V0    # [N, 1]
-        elif self.nlayer == 3:
-            # out
-            out_input = torch.mm(hid_output2, self.V) + self.V0  # [N, 1]
+                # hidden 6
+                hid_input5 = torch.mm(hid_output4, self.W5) + self.W05  # [N, hid]
+                # print(f"h1 shape {hid_input2.shape}")  # [N, hid]
+                hid_output5 = self.hid_activation5(hid_input5)
+
+                # out
+                out_input = torch.mm(hid_output5, self.V) + self.V0    # [N, 1]
+            else self.nlayer == 3:
+                # out
+                out_input = torch.mm(hid_output2, self.V) + self.V0  # [N, 1]
+        elif self.nlayer == 1:
+            out_input = hid_output
         # print(f"output: x_ shape {out_input.shape}")     # [N, 1]
         out_output = self.out_activation(out_input)
         # print(f"output shape {out_output.shape}")     # [N, 1]
@@ -759,7 +768,7 @@ class GAT_MLP(nn.Module):
         self.input_dims = nhid_tuple[1][-1]       
         self.mlp = MLP(mlp_layers, self.hid, self.input_dims, 1)
 
-    def forward(self, x, adj, observation, z=None):
+    def forward(self, x, adj, observation, s_mat=None, z=None):
         h_ = self.gat(x, adj, observation, None, z)
         h = self.mlp(h_)
 
