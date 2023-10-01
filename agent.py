@@ -307,10 +307,14 @@ class DQAgent:
                 if self.nnmodel == "v4":
                     logging.debug(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
                     node_feature = torch.concat((node_feature, self.s_mat), 1)
-                q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
-                                        torch.Tensor(state).to(self.device), None,
-                                        z=hyper.to(self.device))
 
+                    q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                            torch.Tensor(state).to(self.device), None,
+                                            z=hyper.to(self.device))
+                else:
+                    q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                            torch.Tensor(state).to(self.device), self.s_mat.to(self.device),
+                                            z=hyper.to(self.device))
             if self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
                 
                 q_a = torch.squeeze(q_a, dim=0)
@@ -326,10 +330,14 @@ class DQAgent:
                 next_s = next_s[None, ...]
                 q_target = self.target_model(next_s.to(self.device), adj.to(self.device))
             else:
-                q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
-                                        torch.Tensor(next_state).to(self.device), None,
+                if self.nnmodel == "v01":
+                    q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
+                                            torch.Tensor(next_state).to(self.device), None,
+                                            z=hyper.to(self.device))
+                else:
+                    q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
+                                        torch.Tensor(next_state).to(self.device), self.s_mat.to(self.device),
                                         z=hyper.to(self.device))
-
             if self.nnmodel == "v0":
                 q_target = torch.squeeze(q_target, dim=0)
                 logging.debug(f"v0 q target size is {q_target.size()}")
