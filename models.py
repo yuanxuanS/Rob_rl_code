@@ -317,11 +317,11 @@ class MLP(nn.Module):
 
                 # out
                 out_input = torch.mm(hid_output5, self.V) + self.V0    # [N, 1]
-            else self.nlayer == 3:
+            elif self.nlayer == 3:
                 # out
                 out_input = torch.mm(hid_output2, self.V) + self.V0  # [N, 1]
         elif self.nlayer == 1:
-            out_input = hid_output
+            out_input = torch.mm(hid_output, self.V) + self.V0
         # print(f"output: x_ shape {out_input.shape}")     # [N, 1]
         out_output = self.out_activation(out_input)
         # print(f"output shape {out_output.shape}")     # [N, 1]
@@ -464,9 +464,6 @@ class GAT_degree2(nn.Module):
         h_ = self.gat(x, adj, observation, s_mat, z)        # [n, p]
         # print(f"input  feature vector is \n {h_}")
 
-        # logging.debug(f"number of ndoe is {nbr}, s is \n {s_mat}")
-        if not isinstance(s_mat, torch.Tensor):
-            s_mat = torch.Tensor(s_mat)
 
         # print(f"initial vector \n{h_} \n adj is \n{adj}")
         h_neighbor_sum = torch.mm(adj, h_)      # get neighbor vector, [n, n] * [n, p]——[n, p]
@@ -774,20 +771,20 @@ class GAT_MLP(nn.Module):
 
         return h
 
-# layer = (2, 2)
+# layer = (1, 1)
 # features_dim = 3
-# hidden_dim = ((8,3,), (16, 5))
+# hidden_dim = ((16,), (8,))
 # alpha = 0.2     # leakyReLU的alpha
 # nhead = 2
 # node_nbr = 10
 # graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
 
-# mlp_layer = 3
+# mlp_layer = 1
 # mlp_hid = 10
 # model = GAT_MLP(mlp_layer, mlp_hid, layer, nfeat=features_dim, nhid_tuple=hidden_dim, 
-            # alpha=alpha, nheads=nhead,
-            # mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
-# # # # test
+#             alpha=alpha, nheads=nhead,
+#             mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
+# # # test
 #
 # adj_matrix = graph.adj_matrix
 # # # print(f"graph adj matrix {graph.adj_matrix}")
