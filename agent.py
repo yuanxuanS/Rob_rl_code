@@ -8,7 +8,7 @@ import logging
 from graphviz import Digraph
 from torchviz import make_dot, make_dot_from_trace
 from torch.profiler import profile, record_function, ProfilerActivity
-
+from utils import test_memory
 seed = seed.get_value()
 torch.manual_seed(seed)
 torch.cuda.manual_seed(seed)
@@ -62,6 +62,7 @@ class DQAgent:
         self.lr = main_setting["lr"]
 
         self.path = None
+        self.test_mem =True
 
         if self.model_name == 'GAT_QN':
 
@@ -162,10 +163,11 @@ class DQAgent:
     def hook(self, grad):
         logging.debug("tensor grad:", grad)
 
+    @torch.no_grad()
     def act(self, observation, feasible_action, mode):
         # policy
         if self.model_name == 'GAT_QN':
-
+            
             if self.curr_epsilon > np.random.rand() and mode != "valid":
                 action = np.random.choice(feasible_action)
                 # print(f"action is {action}")
@@ -173,18 +175,28 @@ class DQAgent:
                 # GAT, 输入所有节点特征， 图的结构关系-邻接矩阵，
                 # node_features 融合state
                 # print(f"{self.print_tag} adj_matrix is {self.graph.adj_matrix}")
-                input_node_feat = copy.deepcopy(self.node_features)
+                # input_node_feat = copy.deepcopy(self.node_features)
+                if self.test_mem:
+                    test_memory()
+                input_node_feat = self.node_features
+
                 if not isinstance(input_node_feat, torch.Tensor):
                     input_node_feat = torch.Tensor(input_node_feat)
                 if not isinstance(self.s_mat, torch.Tensor):
                     self.s_mat = torch.Tensor(self.s_mat)
                 logging.debug(f" get policy ")
 
+                if self.test_mem:
+                    test_memory()
+
                 if self.nnmodel == "v4":
                     input_node_feat = torch.concat((input_node_feat, self.s_mat), 1)
                 if self.nnmodel == "v0":
                     input_node_feat = observation.T
                     logging.debug(f"input node feature size of v0 is {input_node_feat}")
+
+                if self.test_mem:
+                    test_memory()
 
                 # with profile(activities=[ProfilerActivity.CPU],
                 #             profile_memory=True, record_shapes=True) as prof:
@@ -204,6 +216,8 @@ class DQAgent:
                                             torch.Tensor(observation).to(self.device), self.s_mat,
                                             z=self.z.to(self.device))
                 logging.debug(f" get policy done , action")
+                if self.test_mem:
+                    test_memory()
                 # print(prof.key_averages().table(sort_by="self_cpu_memory_usage"))
 
                 
@@ -211,6 +225,9 @@ class DQAgent:
                     q_a = q_a.cpu()
                 if self.nnmodel == "v0":
                     q_a = torch.squeeze(q_a, dim=0)
+
+                if self.test_mem:
+                    test_memory()
 
                 infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
                 # print(f"{self.print_tag} infeasible action is {infeasible_action}")
@@ -224,12 +241,15 @@ class DQAgent:
                 # logging.debug(f"act, final q_a is {q_a}")
                 action = q_a.argmax()
 
+                if self.test_mem:
+                    test_memory()
+
         elif self.model_name == "random":
             action = np.random.choice(feasible_action)
 
         if not isinstance(action, int):
             action = int(action)
-        # ？ return action.item()
+            # ？ return action.item()
         return action
 
     def remember(self, sample_lst):
@@ -264,6 +284,9 @@ class DQAgent:
     def update(self, i):
         # 采样batch更新policy_model
         # 从memory中采样
+        if self.test_mem:
+            test_memory()   
+
         batch = self.get_sample()
         if not batch:
             # print(f"{self.print_tag} no enough sample and no update")
@@ -281,15 +304,23 @@ class DQAgent:
 
         
         i = 0
+        losses = 0.
+        if self.test_mem:
+            logging.debug(f"before batches")
+            test_memory()
         for transition in batch:
 
-
+            
             state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
             # 用目标网络计算目标值y
             graph = self.graphs[g_id]
             adj = torch.Tensor(graph.adj_matrix)
             node_feature = torch.Tensor(self.node_feat_pool[ft_id])
             hyper = torch.Tensor(self.hyper_pool[hyper_id])
+
+            if self.test_mem:
+                logging.debug(f"p1")
+                test_memory()
 
             if not isinstance(self.s_mat, torch.Tensor):
                 self.s_mat = torch.Tensor(self.s_mat)
@@ -298,6 +329,10 @@ class DQAgent:
                 node_feature = state.T
                 # logging.debug(f" node feature size of v0 is {node_feature.size()}")
             
+            if self.test_mem:
+                logging.debug(f"p2")
+                test_memory()
+
             if self.nnmodel == "v0":
                 if not isinstance(node_feature, torch.Tensor):
                     node_feature = torch.Tensor(node_feature)
@@ -315,6 +350,11 @@ class DQAgent:
                     q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
                                             torch.Tensor(state).to(self.device), self.s_mat.to(self.device),
                                             z=hyper.to(self.device))
+            
+            if self.test_mem:
+                logging.debug(f"p3")
+                test_memory()
+
             if self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
                 
                 q_a = torch.squeeze(q_a, dim=0)
@@ -322,6 +362,10 @@ class DQAgent:
             
 
             q = q_a[action]
+
+            if self.test_mem:
+                logging.debug(f"p4")
+                test_memory()
 
             if self.nnmodel == "v0":
                 next_s = next_state.T
@@ -338,6 +382,11 @@ class DQAgent:
                     q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
                                         torch.Tensor(next_state).to(self.device), self.s_mat.to(self.device),
                                         z=hyper.to(self.device))
+            
+            if self.test_mem:
+                logging.debug(f"p5")
+                test_memory()
+            
             if self.nnmodel == "v0":
                 q_target = torch.squeeze(q_target, dim=0)
                 logging.debug(f"v0 q target size is {q_target.size()}")
@@ -345,6 +394,10 @@ class DQAgent:
             # logging.debug(f"target nn is {q_target}")
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
             # print(f"{self.print_tag} infeasible action is {infeasible_action}")
+
+            if self.test_mem:
+                logging.debug(f"p6")
+                test_memory()
 
             if self.algor == "DQN":
                 q_target[infeasible_action] = -9e15
@@ -360,6 +413,11 @@ class DQAgent:
                 # logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
                 target = reward + (1 - done) * self.gamma * q_target[policy_max_action].detach()
                 # logging.debug(f"target value is {target}")
+            
+            if self.test_mem:
+                logging.debug(f"p7")
+                test_memory()
+
             if not isinstance(target, torch.Tensor):
                 target = torch.Tensor([target])
             # print(f"{self.print_tag} calculated target q is {target}")
@@ -383,8 +441,10 @@ class DQAgent:
             else:
                 qs = torch.concat((qs, q), 0)
                 ts = torch.concat((ts, target), 0)
-                # losses = losses + self.criterion(q, target)
-
+            # loss = self.criterion(q, target)
+            if self.test_mem:
+                logging.debug(f"p8")
+                test_memory()
             i += 1
         # losses_a = make_dot(losses)
         # losses_a.render(
@@ -410,20 +470,30 @@ class DQAgent:
         # torch.autograd.set_detect_anomaly(True)
         # 梯度更新
         # logging.debug(f"this update: q is {qs}, target is {ts}")
+        if self.test_mem:
+            logging.debug(f"after batches")
+            test_memory()
+
         loss = self.criterion(qs, ts)
-        # logging.debug(f"loss is {loss}")
-        self.loss = loss
+        logging.debug(f"loss is {losses}")
+        self.loss = loss.item()
         self.optimizer.zero_grad()
         # logging.debug(f"before backward")
         # for name, param in self.policy_model.named_parameters():
         #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
 
         loss.backward()
+
+        if self.test_mem:
+            test_memory()
         # logging.debug(f"after backward")
         for name, param in self.policy_model.named_parameters():
             # logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
             pass
         self.optimizer.step()
+
+        if self.test_mem:
+            test_memory()
 
         for h in self.hs:
             h.remove()
@@ -434,6 +504,10 @@ class DQAgent:
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())  #
             # logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
+
+        if self.test_mem:
+            test_memory()
+        del qs, ts, loss
         return self.loss
 
 

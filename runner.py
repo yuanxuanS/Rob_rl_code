@@ -4,6 +4,7 @@ import utils
 import logging
 import time
 import psutil
+import sys
 from torch.profiler import profile, record_function, ProfilerActivity
 logging.basicConfig(level=logging.DEBUG,
                     format='(%(threadName)-10s) %(message)s',
@@ -105,7 +106,7 @@ class Runner:
         self.test_time = True
         for episode in range(self.training_setting["train_episodes"]):  # one-step, adversary is a bandit
             self.global_iter += 1
-
+           
             if self.test_time:
                 epi_st = time.time()
             # sample graph
@@ -117,6 +118,7 @@ class Runner:
 
             if self.test_mem:
                 self.test_memory()
+                logging.debug(f"before interact, memory size {sys.getsizeof(self.agent.memory)}")
 
             # sample node feature
             ft_id = 0
@@ -183,6 +185,9 @@ class Runner:
                 infeasible_action = [k for k in range(self.agent.graph.node) if k not in feasible_action]
                 logging.debug(f"return infeasible action")
 
+                if self.test_mem:
+                    self.test_memory()
+
                 if self.test_time:
                     print(f"time before act in a episode {time.time() - this_st}")
                     act_st = time.time()
@@ -203,12 +208,18 @@ class Runner:
                 next_state, reward, done = self.environment.step_seed(i, action)
                 logging.debug(f"get reward is {reward}")
 
+                if self.test_mem:
+                    self.test_memory()
+
                 if self.test_time:
                     step_ed = time.time()
                     print(f"time of env step(simulation) is {step_ed - step_st}")
                     last_st = time.time()
 
                 feasible_action.remove(action)
+
+                if self.test_mem:
+                    self.test_memory()
 
                 # add to buffer
                 if self.main_setting["agent_method"] == 'rl':
@@ -217,9 +228,15 @@ class Runner:
                     self.agent.remember(sample)
                 elif self.main_setting["agent_method"] == 'random':
                     pass
+                
+                if self.test_mem:
+                    self.test_memory()
 
                 cumul_reward += reward
                 sub_reward.append(reward)
+
+                if self.test_mem:
+                    self.test_memory()
 
                 # # get sample and update the main model, GAT
                 # with profile(activities=[ProfilerActivity.CPU],
@@ -229,6 +246,9 @@ class Runner:
                     if self.test_time:
                         upd_st = time.time()
                     loss = self.agent.update(i)
+                    
+                    if self.test_mem:
+                        self.test_memory()
 
                     if self.test_time:
                         upd_ed = time.time()
@@ -236,10 +256,14 @@ class Runner:
                     logging.debug(f"after main agent update, get loss :{loss}")
                     self.main_loss.append(loss)
                     sub_loss += loss
+
+                    
                 elif self.main_setting["agent_method"] == "random":
                     pass
                 if self.test_mem:
                     self.test_memory()
+                    logging.debug(f"after interact, memory size {utils.get_size(self.agent.memory)}")
+
                 # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
 
                 if self.test_time:
@@ -252,6 +276,8 @@ class Runner:
             logging.debug(f"after budget selection, main agent's return is {cumul_reward}, overall loss is {sub_loss}")
             self.cumu_reward.append(cumul_reward)
 
+            if self.test_mem:
+                self.test_memory()
             # print(f"cumulative reward is {cumul_reward}")
             # plot
             # plt.plot(range(self.environment.budget), sub_reward)
@@ -273,6 +299,8 @@ class Runner:
             self.writer_base.add_scalar(
                 f'main/GPU={self.device_setting["use_cuda"]}/nature={self.training_setting["with_nature"]}/cumulative reward per episode',
                 best_reward[-1], self.global_iter)
+            
+            
 
             if self.main_setting["agent_method"] == "rl":
                 self.writer.add_scalar(
@@ -287,7 +315,11 @@ class Runner:
             if self.test_time:
                 print(f"last record in tensorboard time is {time.time() - record_st}")
                 print(f"time of an training episode is {time.time() - epi_st}")
-
+            
+            if self.test_mem:
+                logging.debug(f"tensorboard writer part:")
+                self.test_memory()
+            logging.debug(f"agent size: {sys.getsizeof(self.agent)}; env size:{sys.getsizeof(self.environment)}; ")
         # utils.draw_distri_hist(self.cumu_reward, self.path, "cumu_reward")
 
     def final_valid(self):
