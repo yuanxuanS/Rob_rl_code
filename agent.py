@@ -62,7 +62,7 @@ class DQAgent:
         self.lr = main_setting["lr"]
 
         self.path = None
-        self.test_mem =True
+        self.test_mem =False
 
         if self.model_name == 'GAT_QN':
 
@@ -74,7 +74,7 @@ class DQAgent:
             hid_s_dim_tp = (main_setting["GAT_s_hid_dim"], main_setting["GAT_s_out_hid_dim"])
 
             self.nnmodel = main_setting["nnVersion"]
-            logging.debug(f"nnmodel {self.nnmodel}")
+            logging.info(f"nnmodel {self.nnmodel}")
             if self.nnmodel == "v2" or self.nnmodel == "v3":
                 out_nhid_tp = hid_dim_tp[-1]
                 # assert out_nhid_tp[-1] == 1, "out feature of agent model must be one"
@@ -113,6 +113,7 @@ class DQAgent:
                                     hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
 
             elif self.nnmodel == "v0":
+                # nhid = 8, out-hid =32
                 self.policy_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha, nheads=nhead,
                         layer_type="default")
                 self.target_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha,
@@ -123,6 +124,11 @@ class DQAgent:
                 self.policy_model.to(self.device)
                 self.target_model.to(self.device)
 
+            logging.debug(f"model parameters :\n")
+            for name, param in self.policy_model.named_parameters():
+                logging.debug(f"this layer: {name}, required grad: {param.requires_grad}")
+                pass
+        
             self.optimizer = torch.optim.Adam(self.policy_model.parameters(), lr=self.lr)
 
         elif self.model_name == "random":
@@ -184,7 +190,7 @@ class DQAgent:
                     input_node_feat = torch.Tensor(input_node_feat)
                 if not isinstance(self.s_mat, torch.Tensor):
                     self.s_mat = torch.Tensor(self.s_mat)
-                logging.debug(f" get policy ")
+                logging.info(f" get policy ")
 
                 if self.test_mem:
                     test_memory()
@@ -193,7 +199,7 @@ class DQAgent:
                     input_node_feat = torch.concat((input_node_feat, self.s_mat), 1)
                 if self.nnmodel == "v0":
                     input_node_feat = observation.T
-                    logging.debug(f"input node feature size of v0 is {input_node_feat}")
+                    logging.info(f"input node feature size of v0 is {input_node_feat}")
 
                 if self.test_mem:
                     test_memory()
@@ -204,7 +210,7 @@ class DQAgent:
                     q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
                                             torch.Tensor(observation).to(self.device), None,
                                             z=self.z.to(self.device))
-                    logging.debug(f"v01 q size is {q_a.size()}")
+                    logging.info(f"v01 q size is {q_a.size()}")
                 elif self.nnmodel == "v0":
                     input_node_feat = input_node_feat[None, ...]
                     if not isinstance(input_node_feat, torch.Tensor):
@@ -215,7 +221,7 @@ class DQAgent:
                     q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
                                             torch.Tensor(observation).to(self.device), self.s_mat,
                                             z=self.z.to(self.device))
-                logging.debug(f" get policy done , action")
+                logging.info(f" get policy done , action")
                 if self.test_mem:
                     test_memory()
                 # print(prof.key_averages().table(sort_by="self_cpu_memory_usage"))
@@ -292,7 +298,7 @@ class DQAgent:
             # print(f"{self.print_tag} no enough sample and no update")
             return 0.
         else:
-            logging.debug(f"batch length is {len(batch)}")
+            logging.info(f"batch length is {len(batch)}")
         # check gradients
         self.hs = []
         # for name, module in self.policy_model.named_children():
@@ -340,7 +346,7 @@ class DQAgent:
                 q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device))
             else:
                 if self.nnmodel == "v4":
-                    logging.debug(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
+                    logging.info(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
                     node_feature = torch.concat((node_feature, self.s_mat), 1)
 
                     q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
@@ -358,7 +364,7 @@ class DQAgent:
             if self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
                 
                 q_a = torch.squeeze(q_a, dim=0)
-                logging.debug(f"v01 q size is {q_a.size()}")
+                logging.info(f"v01 q size is {q_a.size()}")
             
 
             q = q_a[action]
@@ -389,7 +395,7 @@ class DQAgent:
             
             if self.nnmodel == "v0":
                 q_target = torch.squeeze(q_target, dim=0)
-                logging.debug(f"v0 q target size is {q_target.size()}")
+                logging.info(f"v0 q target size is {q_target.size()}")
             
             # logging.debug(f"target nn is {q_target}")
             infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
@@ -475,7 +481,7 @@ class DQAgent:
             test_memory()
 
         loss = self.criterion(qs, ts)
-        logging.debug(f"loss is {losses}")
+        logging.info(f"loss is {loss}")
         self.loss = loss.item()
         self.optimizer.zero_grad()
         # logging.debug(f"before backward")
@@ -486,10 +492,10 @@ class DQAgent:
 
         if self.test_mem:
             test_memory()
-        # logging.debug(f"after backward")
+        logging.debug(f"\nafter backward")
         for name, param in self.policy_model.named_parameters():
-            # logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
-            pass
+            logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+            # pass
         self.optimizer.step()
 
         if self.test_mem:

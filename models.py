@@ -140,6 +140,7 @@ class attentions(nn.Module):
             layer = GraphAttentionLayer(in_dim, out_dim, alpha=self.alpha, concat=concat, mergeZ=self.mergeZ,
                                         node_dim=self.node_dim, method=method)
             self.attention.append(layer)
+            self.add_module('attention_layer_{}'.format(i), layer)
 
     def forward(self, x, adj, s_mat, z=None):
         h = x
@@ -581,7 +582,7 @@ class GAT(nn.Module):
 
         for i, attention in enumerate(self.attentions):
             # print(f"第{i}个layer, {str(attention)}")
-            self.add_module('attention_{}'.format(i), attention)
+            self.add_module('attention_head_{}'.format(i), attention)
 
         # 会把多头的结果拼接起来，所以是nhid * nheads， 输出n个类
         #################
@@ -641,6 +642,40 @@ class GAT(nn.Module):
         # logging.debug(f"after log softmax, x is \n {x}")
 
         return result
+
+
+'''
+layer = (2, 2)
+features_dim = 3
+hidden_dim = ((8,3,), (16, 5))
+alpha = 0.2     # leakyReLU的alpha
+nhead = 2
+node_nbr = 10
+graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
+#
+# nfeat_s = node_nbr
+# hidden_dim_s = ((8,3,), (16, 4))
+model = GAT(layer, nfeat=features_dim, nhid_tuple=hidden_dim, alpha=alpha, nheads=nhead,
+            mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
+# # # # test
+#
+adj_matrix = graph.adj_matrix
+# # # print(f"graph adj matrix {graph.adj_matrix}")
+adj_matrix = torch.Tensor(adj_matrix)
+xv = generate_node_feature(graph, features_dim)
+# # # print(f"node feature vector size {xv.size()}")     # [0-100]
+xv = torch.Tensor(xv)       # torch的输入必须是tensor
+#
+s_mat = graph.adm
+y = model(xv, adj_matrix, None, s_mat, None)
+
+for name, param in model.named_parameters():
+    print(f"this layer: {name}, required grad: {param.requires_grad}")
+
+print(f"y size {y.size()}")
+
+# print(f"get y from GAT is {y}")     # [n, 1]
+'''
 
 class GAT_struc(nn.Module):
     def __init__(self, layer_tuple, nfeat, nhid_tuple, nfeat_s, nhid_s_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
