@@ -5,8 +5,8 @@ import sys
 import psutil
 import logging
 def test_memory():
-        # logging.debug(f"use memory: {psutil.memory_percent()}")
-        logging.debug(f"use vitual memory: {psutil.virtual_memory()}")
+    # logging.debug(f"use memory: {psutil.memory_percent()}")
+    logging.debug(f"use vitual memory: {psutil.virtual_memory()}")
 
 
 

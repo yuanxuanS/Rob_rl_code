@@ -88,7 +88,7 @@ def setup_logger(path):
     for hdlr in log.handlers[:]:
         log.removeHandler(hdlr)
     log.addHandler(file_handler)
-    log.setLevel(logging.DEBUG)
+    log.setLevel(logging.INFO)
 
     return log
 # sys.stdout = open(os.devnull, 'w')

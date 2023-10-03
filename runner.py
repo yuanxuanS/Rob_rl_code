@@ -6,7 +6,7 @@ import time
 import psutil
 import sys
 from torch.profiler import profile, record_function, ProfilerActivity
-logging.basicConfig(level=logging.DEBUG,
+logging.basicConfig(level=logging.INFO,
                     format='(%(threadName)-10s) %(message)s',
                     )
 
@@ -140,15 +140,15 @@ class Runner:
                 print(f"initial time is {time.time() - epi_st}")
 
             if self.training_setting["with_nature"]:
-                logging.debug(f"current train with nature")
+                logging.info(f"current train with nature")
                 self.nature.reset()
                 nature_state, _ = self.environment.get_seed_state()
-                logging.debug(f"seed state is, and send it to adversary: \n {nature_state}")
+                logging.info(f"seed state is, and send it to adversary: \n {nature_state}")
                 z_action_pair_lst = self.nature.act(nature_state)
-                logging.debug(f"adversary return: \n {z_action_pair_lst}")
-                logging.debug(f"before adversary do, env hyperparameter is \n {self.environment.z}")
+                logging.info(f"adversary return: \n {z_action_pair_lst}")
+                logging.info(f"before adversary do, env hyperparameter is \n {self.environment.z}")
                 z_new = self.environment.step_hyper(z_action_pair_lst)
-                logging.debug(f"updating env hyperparameter, current hyperparam is \n {self.environment.z}")
+                logging.info(f"updating env hyperparameter, current hyperparam is \n {self.environment.z}")
 
             # after adversary change environment z, get best solution
             if self.test_time:
@@ -160,17 +160,17 @@ class Runner:
                 print(f"time of greedy computation is {grd_ed - grd_st}")
 
                 agent_st = time.time()
-            logging.debug(f"best seed set is {best_s}, best reward is {best_reward}")
+            logging.info(f"best seed set is {best_s}, best reward is {best_reward}")
             # main agent
             self.agent.reset()
             cumul_reward = 0.
 
             sub_reward = []
             sub_loss = 0
-            logging.debug(f"before main agent act")
+            logging.info(f"before main agent act")
 
             for i in range(self.environment.budget):
-                logging.debug(f"---------- sub step {i}")
+                logging.info(f"---------- sub step {i}")
     
                 if self.test_time:
                     this_st = time.time()
@@ -181,9 +181,9 @@ class Runner:
                 if self.test_mem:
                     self.test_memory()
 
-                logging.debug(f"return state")
+                logging.info(f"return state")
                 infeasible_action = [k for k in range(self.agent.graph.node) if k not in feasible_action]
-                logging.debug(f"return infeasible action")
+                logging.info(f"return infeasible action")
 
                 if self.test_mem:
                     self.test_memory()
@@ -202,11 +202,11 @@ class Runner:
                     print(f"time of agent act is {act_ed - act_st}")
                     step_st = time.time()
 
-                logging.debug(f"curr seed set is {infeasible_action}, main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
+                logging.info(f"curr seed set is {infeasible_action}, main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
 
                 
                 next_state, reward, done = self.environment.step_seed(i, action)
-                logging.debug(f"get reward is {reward}")
+                logging.info(f"get reward is {reward}")
 
                 if self.test_mem:
                     self.test_memory()
@@ -223,7 +223,7 @@ class Runner:
 
                 # add to buffer
                 if self.main_setting["agent_method"] == 'rl':
-                    logging.debug(f"main agent method is reinforcement learning")
+                    logging.info(f"main agent method is reinforcement learning")
                     sample = [state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id]
                     self.agent.remember(sample)
                 elif self.main_setting["agent_method"] == 'random':
@@ -242,7 +242,7 @@ class Runner:
                 # with profile(activities=[ProfilerActivity.CPU],
                 #             profile_memory=True, record_shapes=True) as prof:
                 if self.main_setting["agent_method"] == "rl":
-                    logging.debug(f"now update the main agent")
+                    logging.info(f"now update the main agent")
                     if self.test_time:
                         upd_st = time.time()
                     loss = self.agent.update(i)
@@ -253,7 +253,7 @@ class Runner:
                     if self.test_time:
                         upd_ed = time.time()
                         print(f"time of update is {upd_ed - upd_st}")
-                    logging.debug(f"after main agent update, get loss :{loss}")
+                    logging.info(f"after main agent update, get loss :{loss}")
                     self.main_loss.append(loss)
                     sub_loss += loss
 
@@ -273,7 +273,7 @@ class Runner:
                 print(f"agent part time is {time.time() - agent_st}")
                 record_st = time.time()
 
-            logging.debug(f"after budget selection, main agent's return is {cumul_reward}, overall loss is {sub_loss}")
+            logging.info(f"after budget selection, main agent's return is {cumul_reward}, overall loss is {sub_loss}")
             self.cumu_reward.append(cumul_reward)
 
             if self.test_mem:
@@ -289,7 +289,7 @@ class Runner:
                 self.nature.remember(nature_state, z_action_pair_lst, -cumul_reward)
                 # get a trajectory and update the nature model
                 act_loss_nature, cri_loss_nature = self.nature.update()
-                logging.debug(f"adversary, actor loss {act_loss_nature} critic loss {cri_loss_nature}")
+                logging.info(f"adversary, actor loss {act_loss_nature} critic loss {cri_loss_nature}")
             # self.nature_critic_loss.append(cri_loss_nature.item())
             # self.nature_actor_loss.append(act_loss_nature.item())
 
@@ -319,7 +319,7 @@ class Runner:
             if self.test_mem:
                 logging.debug(f"tensorboard writer part:")
                 self.test_memory()
-            logging.debug(f"agent size: {sys.getsizeof(self.agent)}; env size:{sys.getsizeof(self.environment)}; ")
+                logging.debug(f"agent size: {sys.getsizeof(self.agent)}; env size:{sys.getsizeof(self.environment)}; ")
         # utils.draw_distri_hist(self.cumu_reward, self.path, "cumu_reward")
 
     def final_valid(self):
