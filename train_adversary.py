@@ -54,9 +54,13 @@ parser.add_argument("--GAT-s-hid-dim", type=str, default="")
 parser.add_argument("--GAT-s-out-hid-dim", type=str, default="")
 
 parser.add_argument("--alpha", type=float, default=0.2)
-
 parser.add_argument("--seed-nbr", type=int, default=3)
 parser.add_argument("--gamma", type=float, default=0.99)
+
+parser.add_argument("--init-epsilon", type=float, default=0.)
+parser.add_argument("--final-epsilon", type=float, default=0.)
+parser.add_argument("--epsilon_decay_steps", type=int, default=1000)
+
 parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--rl-algor", type=str, default="DQN")
 parser.add_argument("--nnVersion", type=str, default="v1")
@@ -167,6 +171,9 @@ main_setting = {
     "nheads": args.GAT_heads,
     "alpha": args.alpha,
     "gamma": args.gamma,
+    "init_epsilon": args.init_epsilon,
+    "final_epsilon": args.final_epsilon,
+    "epsilon_decay_steps": args.epsilon_decay_steps,
     "lr": args.lr,
     "rl_algor": args.rl_algor,      # "DQN"
     "nnVersion": args.nnVersion,
@@ -245,7 +252,6 @@ eps = 0.2
 
 # main agent
 cascade = None
-epsilon = 0.3
 update_target_steps = 5       # copy policy_model -> target model
 
 
@@ -269,7 +275,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
                          model_name,
                          main_setting,
                          env_setting["node_feat_dims"],
-                         epsilon, main_setting["batch_size"], update_target_steps,
+                         main_setting["batch_size"], update_target_steps,
                          device_setting["use_cuda"],
                          device_setting["device"])
 

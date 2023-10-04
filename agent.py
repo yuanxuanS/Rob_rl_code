@@ -24,7 +24,7 @@ class DQAgent:
     def __init__(self, graph_pool, nodes, node_feat_pool, hyper_pool, model_name,
                  main_setting,
                  node_dim,
-                 init_epsilon, train_batch, update_target_steps, use_cuda, device):
+                 train_batch, update_target_steps, use_cuda, device):
 
         self.use_cuda = use_cuda
         self.merge_z = main_setting["observe_z"]
@@ -41,10 +41,18 @@ class DQAgent:
 
         self.node_features = None
         self.node_features_dims = node_dim
+
+        self.global_step = 0
+
         # policy
         self.algor = main_setting["rl_algor"]
         self.method = main_setting["GAT_mtd"]
-        self.curr_epsilon = init_epsilon
+
+        self.init_epsilon = main_setting["init_epsilon"]
+        self.final_epsilon = main_setting["final_epsilon"]
+        self.epsilon_decay_steps = main_setting["epsilon_decay_steps"]
+        self.curr_epsilon = self.init_epsilon
+
         self.policy_model = None
         self.target_model = None
 
@@ -155,7 +163,7 @@ class DQAgent:
         self.z = torch.Tensor(self.hyper_pool[hyper_id])
 
     def reset(self):
-        self.iter_step = 1
+        self.global_step = 1
         # print(f"{self.print_tag} agent reset done!")
 
     def forward_hook(self, module, input, output):
@@ -173,11 +181,24 @@ class DQAgent:
     def hook(self, grad):
         logging.debug("tensor grad:", grad)
 
+
+    def epsilon_decay(self, init_v: float, final_v: float, step_t: int, decay_step: int):
+        assert 0 < final_v <= 1, ValueError('Value Error')
+        assert step_t >= 0, ValueError('Value Error')
+        assert decay_step > 0, ValueError('Decay Value Error')
+        
+        if step_t >= decay_step:
+            return final_v
+        return step_t * ((final_v - init_v)/float(decay_step)) + init_v
+
+
     @torch.no_grad()
     def act(self, observation, feasible_action, mode):
+        self.global_step += 1
         # policy
         if self.model_name == 'GAT_QN':
-            
+            self.curr_epsilon = self.epsilon_decay(self.init_epsilon, self.final_epsilon, self.global_step, self.decay_step)
+            logging.info(f"epsilon is {self.curr_epsilon}")
             if self.curr_epsilon > np.random.rand() and mode != "valid":
                 action = np.random.choice(feasible_action)
                 # print(f"action is {action}")
