@@ -59,7 +59,7 @@ parser.add_argument("--gamma", type=float, default=0.99)
 
 parser.add_argument("--init-epsilon", type=float, default=0.)
 parser.add_argument("--final-epsilon", type=float, default=0.)
-parser.add_argument("--epsilon_decay_steps", type=int, default=1000)
+parser.add_argument("--epsilon-decay-steps", type=int, default=1000)
 
 parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--rl-algor", type=str, default="DQN")
