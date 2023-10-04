@@ -54,21 +54,23 @@ class GAT_origin(nn.Module):
         # q net: 展开为一维，分别映射，所以是node_num * get_out_dim
         self.q = torch.nn.Linear(node_num * gat_out_dim, node_num, bias=True)
 
-    def forward(self, xv, adj, mask=None):
+    def forward(self, xv, adjs, mask=None):
         """
         xv: batch_size x N_nodes x Dim_features
         adj: batch_size x N_nodes x N_nodes
         """
-        batch_size = xv.shape[0]
+        batch_size = len(xv)
+        # batch_size = xv.shape[0]
 
         x = xv  # .view(-1, xv.shape[-1])  # TODO use [batch_size x N_nodes, Dim_features]
-        adj = adj  # .view(-1, adj.shape[-1])
+        adjs = adjs  # .view(-1, adj.shape[-1])
 
         outs = []
         for i in range(batch_size):
-            out = [att(x[i, ...], adj[i, ...]) for att in self.attentions]
+            # out = [att(x[i, ...], adj[i, ...]) for att in self.attentions]
+            out = [att(x[i], adjs[i]) for att in self.attentions]
             out = torch.cat(out, dim=1)
-            out = F.elu(self.out_att(out, adj[i, ...]))
+            out = F.elu(self.out_att(out, adjs[i]))
             outs.append(out)
 
         # print(f"before stack , size {len(outs), len(outs[0][1])}, outs \n {outs}")
@@ -78,7 +80,7 @@ class GAT_origin(nn.Module):
         q = self.q(outs.view(batch_size, -1))       # 如果batch_size=1, [1, ode_num, gat_out_dim] —— [1, node_num, 1]
         # print(f"after nn : {q.size()}")
         q = q[..., None]
-        # print(f"q size {q.size()}")
+        logging.info(f"q size {q.size()}")
         return q
 
 

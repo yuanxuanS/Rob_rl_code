@@ -48,6 +48,7 @@ class DQAgent:
         self.algor = main_setting["rl_algor"]
         self.method = main_setting["GAT_mtd"]
 
+        self.use_decay = main_setting["use_decay"]
         self.init_epsilon = main_setting["init_epsilon"]
         self.final_epsilon = main_setting["final_epsilon"]
         self.epsilon_decay_steps = main_setting["epsilon_decay_steps"]
@@ -197,7 +198,10 @@ class DQAgent:
         self.global_step += 1
         # policy
         if self.model_name == 'GAT_QN':
-            self.curr_epsilon = self.epsilon_decay(self.init_epsilon, self.final_epsilon, self.global_step, self.epsilon_decay_steps)
+            if self.use_decay:
+                self.curr_epsilon = self.epsilon_decay(self.init_epsilon, self.final_epsilon, self.global_step, self.epsilon_decay_steps)
+            else:
+                self.curr_epsilon = self.init_epsilon
             logging.info(f"epsilon is {self.curr_epsilon}")
             if self.curr_epsilon > np.random.rand() and mode != "valid":
                 action = np.random.choice(feasible_action)
@@ -288,7 +292,7 @@ class DQAgent:
     def remember(self, sample_lst):
         '''
 
-        :param sample_lst: [state, action, reward, next state]
+        :param sample_lst: [state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id]
         :return:
         '''
         self.memory.append(sample_lst)
@@ -303,23 +307,36 @@ class DQAgent:
             batch = random.sample(self.memory, self.train_batch_size)
             # print(f"{self.print_tag} batch is {batch}")
             # print(f" zip is {list(zip(*batch))}")
-            state_batch = list(list(zip(*batch))[0])
+            state_batch = list(torch.Tensor(list(zip(*batch))[0]))
             # print(f"state batch is {state_batch}")
             action_batch = list(list(zip(*batch))[1])
             reward_batch = list(list(zip(*batch))[2])
-            next_state_batch = list(list(zip(*batch))[3])
+            next_state_batch = list(torch.Tensor(list(zip(*batch))[3]))
             feasible_batch = list(list(zip(*batch))[4])
+            done_batch = list(list(zip(*batch))[5])
+            gid_batch = list(list(zip(*batch))[6])
+            ftid_batch = list(list(zip(*batch))[7])
+            hyid_batch = list(list(zip(*batch))[8])
         else:
             batch = []
-        return batch
-        # return state_batch, action_batch, reward_batch, next_state_batch
+            state_batch = []
+            action_batch = []
+            reward_batch = []
+            next_state_batch = []
+            feasible_batch = []
+            done_batch = []
+            gid_batch = []
+            ftid_batch = []
+            hyid_batch= []
+        # return batch
+        return state_batch, action_batch, reward_batch, next_state_batch, feasible_batch, done_batch, gid_batch, ftid_batch, hyid_batch
 
     def update(self, i):
         # 采样batch更新policy_model
         # 从memory中采样
         if self.test_mem:
             test_memory()   
-
+        
         batch = self.get_sample()
         if not batch:
             # print(f"{self.print_tag} no enough sample and no update")
@@ -548,6 +565,316 @@ class DQAgent:
             test_memory()
         del qs, ts, loss
         return self.loss
+
+    def update2(self, i):
+        # 采样batch更新policy_model
+        # 从memory中采样
+        if self.test_mem:
+            test_memory()   
+        
+        state_batch, action_batch, reward_batch, next_state_batch, feasible_batch, done_batch, gid_batch, ftid_batch, hyid_batch = self.get_sample()
+        if not state_batch:
+            # print(f"{self.print_tag} no enough sample and no update")
+            return 0.
+        else:
+            logging.debug(f"batch length is {len(state_batch)}")
+            # logging.debug(f"state_batch\n{state_batch}\naction_batch\n{action_batch}\nreward_batch\n{reward_batch}\nnext_state_batch\n{next_state_batch} \
+            #     feasible_batch\n {feasible_batch} \n gid_batch\n {gid_batch} \n ftid_batch {ftid_batch} \n hyid_batch {hyid_batch}")
+        # check gradients
+        self.hs = []
+        # for name, module in self.policy_model.named_children():
+        #     logging.debug(f"add hook")
+        #     h = module.register_backward_hook(self.backward_hook)
+        #     self.hs.append(h)
+
+        # losses = torch.tensor(0.)
+        
+        
+        i = 0
+        losses = 0.
+        if self.test_mem:
+            logging.debug(f"before batches")
+            test_memory()
+
+        if self.nnmodel == "v0":
+
+            adjs = []       # list of tensors
+            for gid in gid_batch:
+                graph = self.graphs[gid]
+                adj = torch.Tensor(graph.adj_matrix)
+                adjs.append(adj)
+
+            node_feature = [state.T for state in state_batch]
+            logging.debug(f"state batchm tensor\n {node_feature}")
+
+            q_a = self.policy_model(node_feature, adjs)
+
+            q = q_a[range(self.train_batch_size), action_batch, :]
+            # logging.info(f"q \n {q}")
+
+            next_s = [ns.T for ns in next_state_batch]
+            q_target = self.target_model(next_s, adjs)
+            # logging.debug(f"target {q_target}")
+
+
+            # infeasible_as = [ for feasible_a in feasible_batch]
+            
+            logging.debug(f"q_target after infea {q_target}")
+
+            if self.algor == "DQN":
+                i = -1
+                for feasible_a in feasible_batch:
+                    i += 1
+                    infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
+                    q_target[i, infeasible_action, :] = -9e15
+                # logging.info(f"size of q target max is{q_target.detach().max(dim=1).values.size()}")  # [bs, 1]
+                target = torch.Tensor(reward_batch)[..., None] + (1 - torch.Tensor(done_batch)[..., None]) * self.gamma * q_target.detach().max(dim=1).values
+                logging.debug(f"size if target {target.size()}")
+            
+            elif self.algor == "DDQN":
+                # logging.debug(f"q target, max value is {q_target.max()}")
+                # logging.debug(f"q a, before mask: \n{q_a}")
+                q_a_tmp = q_a.clone()  # 深拷贝，不能改变原值
+                i = -1
+                for feasible_a in feasible_batch:
+                    i += 1
+                    infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
+                    # logging.debug(f"infea a {infeasible_action}")
+                    q_a_tmp[i, infeasible_action, :] = -9e15
+                # logging.debug(f"q a, after mask: \n{q_a_tmp}")
+                policy_max_action = q_a_tmp.argmax(dim=1).squeeze(1).tolist()
+                # logging.debug(f"policy max action is {policy_max_action}")       # 1d list
+                # logging.debug(f"q_target[max] is { q_target[range(self.basic_batch_size), policy_max_action, :].detach()}")      # [bs, 1]
+                # logging.debug(f"done  is { (1 - torch.Tensor(done_batch)[..., None])}") # [bs, 1]
+                # logging.debug(f"torch.Tensor(reward_batch)[..., None, None] is { torch.Tensor(reward_batch)[..., None]}") # [bs, 1]
+                target = torch.Tensor(reward_batch)[..., None] + (1 - torch.Tensor(done_batch)[..., None]) * self.gamma * q_target[range(self.basic_batch_size), policy_max_action, :].detach()
+                # logging.debug(f"target value is {target}") # [bs, 1]
+                
+        loss = self.criterion(q, target)
+        logging.info(f"loss is {loss}")
+        self.loss = loss.item()
+        self.optimizer.zero_grad()
+        # logging.debug(f"before backward")
+        # for name, param in self.policy_model.named_parameters():
+        #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+
+        loss.backward()
+
+        if self.test_mem:
+            test_memory()
+        logging.debug(f"\nafter backward")
+        for name, param in self.policy_model.named_parameters():
+            logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+            # pass
+        self.optimizer.step()
+
+        if self.test_mem:
+            test_memory()
+
+        for h in self.hs:
+            h.remove()
+
+        # 每 C step，更新目标网络 = 当前的行为网络
+        if i % self.copy_model_steps == 0:
+            # logging.debug(f"reload target model, policy model params: {self.policy_model.state_dict()}\n target model param: {self.target_model.state_dict()}")
+            with torch.no_grad():
+                self.target_model.load_state_dict(self.policy_model.state_dict())  #
+            # logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
+
+        if self.test_mem:
+            test_memory()
+            '''
+        for transition in batch:
+
+            
+            state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
+            # 用目标网络计算目标值y
+            graph = self.graphs[g_id]
+            adj = torch.Tensor(graph.adj_matrix)
+            node_feature = torch.Tensor(self.node_feat_pool[ft_id])
+            hyper = torch.Tensor(self.hyper_pool[hyper_id])
+
+            if self.test_mem:
+                logging.debug(f"p1")
+                test_memory()
+
+            if not isinstance(self.s_mat, torch.Tensor):
+                self.s_mat = torch.Tensor(self.s_mat)
+            
+            
+                # logging.debug(f" node feature size of v0 is {node_feature.size()}")
+            
+            if self.test_mem:
+                logging.debug(f"p2")
+                test_memory()
+
+            if self.nnmodel == "v0":
+                
+                node_feature = node_feature[None, ...]
+                
+            else:
+                if self.nnmodel == "v4":
+                    logging.info(f"ndoe feature size {node_feature.size()}, s_mat size {self.s_mat.size()}")
+                    node_feature = torch.concat((node_feature, self.s_mat), 1)
+
+                    q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                            torch.Tensor(state).to(self.device), None,
+                                            z=hyper.to(self.device))
+                elif self.nnmodel == "v5":
+                    q_a = self.policy_model(node_feature.to(self.device))
+                else:
+                    q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                            torch.Tensor(state).to(self.device), self.s_mat.to(self.device),
+                                            z=hyper.to(self.device))
+            
+            if self.test_mem:
+                logging.debug(f"p3")
+                test_memory()
+
+            if self.nnmodel == "v0": # 该网络输出第一个维度是batchsizw
+                
+                q_a = torch.squeeze(q_a, dim=0)
+                logging.info(f"v01 q size is {q_a.size()}")
+            
+
+            q = q_a[action]
+
+            if self.test_mem:
+                logging.debug(f"p4")
+                test_memory()
+
+            if self.nnmodel == "v0":
+                next_s = next_state.T
+                if not isinstance(next_s, torch.Tensor):
+                    next_s = torch.Tensor(next_s)
+                next_s = next_s[None, ...]
+                q_target = self.target_model(next_s.to(self.device), adj.to(self.device))
+            else:
+                if self.nnmodel == "v01":
+                    q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
+                                            torch.Tensor(next_state).to(self.device), None,
+                                            z=hyper.to(self.device))
+                elif self.nnmodel == "v5":
+                    q_target = self.target_model(node_feature.to(self.device))
+                else:
+                    q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
+                                        torch.Tensor(next_state).to(self.device), self.s_mat.to(self.device),
+                                        z=hyper.to(self.device))
+            
+            if self.test_mem:
+                logging.debug(f"p5")
+                test_memory()
+            
+            if self.nnmodel == "v0":
+                q_target = torch.squeeze(q_target, dim=0)
+                logging.info(f"v0 q target size is {q_target.size()}")
+            
+            # logging.debug(f"target nn is {q_target}")
+            infeasible_action = [k for k in range(self.graph.node) if k not in feasible_a]
+            # print(f"{self.print_tag} infeasible action is {infeasible_action}")
+
+            if self.test_mem:
+                logging.debug(f"p6")
+                test_memory()
+
+            if self.algor == "DQN":
+                q_target[infeasible_action] = -9e15
+                target = reward + (1 - done) * self.gamma * q_target.detach().max()
+            elif self.algor == "DDQN":
+                # logging.debug(f"q target, max value is {q_target.max()}")
+                # logging.debug(f"q a, before mask: \n{q_a}")
+                q_a_tmp = q_a.clone()  # 深拷贝，不能改变原值
+                q_a_tmp[infeasible_action] = -9e15
+                # logging.debug(f"q a, after mask: \n{q_a}")
+                policy_max_action = q_a_tmp.argmax()
+                # logging.debug(f"policy max action is {policy_max_action}")
+                # logging.debug(f"q_target[max] is {q_target[policy_max_action]}")
+                target = reward + (1 - done) * self.gamma * q_target[policy_max_action].detach()
+                # logging.debug(f"target value is {target}")
+            
+            if self.test_mem:
+                logging.debug(f"p7")
+                test_memory()
+
+            if not isinstance(target, torch.Tensor):
+                target = torch.Tensor([target])
+            # print(f"{self.print_tag} calculated target q is {target}")
+            # 用行为网络计算当前值q
+
+            # g_b = make_dot(q_a)
+            # g_b.render(
+            #     filename="all q value",
+            #     directory=self.path + "/logdir",
+            #     format="png"
+            # )
+
+            # h = q.register_hook(self.hook)
+            # self.hs.append(h)
+            if i == 0:
+
+                # logging.debug(f"q is {q}")
+                # logging.debug(f"target is {target}")
+                qs = torch.Tensor([q])
+                ts = torch.Tensor([target])
+            else:
+                qs = torch.concat((qs, q), 0)
+                ts = torch.concat((ts, target), 0)
+            # loss = self.criterion(q, target)
+            if self.test_mem:
+                logging.debug(f"p8")
+                test_memory()
+            i += 1
+        # losses_a = make_dot(losses)
+        # losses_a.render(
+        #     filename="losses",
+        #     directory=self.path + "/logdir",
+        #     format="png"
+        # )
+        # logging.debug(f"q batch is {qs}")
+        # logging.debug(f"targets is {ts}")
+        # loss = torch.mean(torch.tensor(losses, requires_grad=True))
+        # loss = losses / len(batch)
+        # loss_a = make_dot(loss)
+        # loss_a.render(
+        #     filename="loss",
+        #     directory=self.path + "/logdir",
+        #     format="png"
+        # )
+        # h = loss.register_hook(self.hook)
+        # self.hs.append(h)
+        # logging.debug(f" loss , requires_grad {loss.requires_grad}, grad {loss.grad}")
+        # print(f"{self.print_tag} update losses are {losses} and loss is {loss}")
+
+        # torch.autograd.set_detect_anomaly(True)
+        # 梯度更新
+        # logging.debug(f"this update: q is {qs}, target is {ts}")
+        if self.test_mem:
+            logging.debug(f"after batches")
+            test_memory()
+
+        loss = self.criterion(qs, ts)
+        logging.info(f"loss is {loss}")
+        self.loss = loss.item()
+        self.optimizer.zero_grad()
+        # logging.debug(f"before backward")
+        # for name, param in self.policy_model.named_parameters():
+        #     logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+
+        loss.backward()
+
+        if self.test_mem:
+            test_memory()
+        logging.debug(f"\nafter backward")
+        for name, param in self.policy_model.named_parameters():
+            logging.debug(f"this layer: {name}, required grad: {param.requires_grad}, gradients: {param.grad}")
+            # pass
+        self.optimizer.step()
+
+                '''
+        del q, target, loss
+
+        return self.loss
+
 
 
 
