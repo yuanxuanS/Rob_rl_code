@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # bash run.sh 100 4 100 3 1037
-# set -vx
+#set -xv
 nodes=$1
 budget=$2
 episode=$3
@@ -8,8 +8,8 @@ seeds=$4
 runtime=$5
 edge_p=0.1
 
-graph_pn=2   # 106
-g_train_nbr=1   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
+graph_pn=50   # 106
+g_train_nbr=49   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
 g_valid_nbr=1
 
 
@@ -17,25 +17,23 @@ valid_with_nature=False   # valid with nature?
 valid_episodes=1
 
 glb_logfile="log_5"
-logdir="10_3"
+logdir="9_13"
 main_method="rl"    # rl
 with_nature=False
 
 rl_algor="DDQN"
-nn_version="v01"
 # hyper parameter of GAT
 nheads=(8)
-atten_layer=1
-hid_dim='(8,)'  # must write , it is a tuple
-hid_dim_s='(8,)'
-out_atten_layer=1
-out_hid_dim='(32,)'  # final one must be 1 if nn model == v1 or v3
-out_hid_dim_s='(32,)'
+atten_layer=2
+hid_dim='(16, 8,)'
+hid_dim_s='(16, 8,)'
+out_atten_layer=2
+out_hid_dim='(4, 1,)'  # final one must be 1 if nn model == v1 or v3
+out_hid_dim_s='(4, 1,)'
 
 alphas=(0.2)
 gammas=(0.99)
 lrs=(1e-3)
-batch_size=16
 
 for nhead in ${nheads[@]}
 do
@@ -52,8 +50,6 @@ do
           --train-episodes $episode --valid-episodes $valid_episodes
           --with-nature $with_nature
           --rl-algor $rl_algor
-          --nnVersion $nn_version
-          --batch-size $batch_size
           --GAT-heads $nhead
           --GAT-atten-layer $atten_layer
           --GAT-out-atten-layer $out_atten_layer
@@ -69,8 +65,6 @@ do
           --valid-with-nature $valid_with_nature --edge-p $edge_p --main-method $main_method
           --train-episodes $episode --valid-episodes $valid_episodes
           --rl-algor $rl_algor
-          --nnVersion $nn_version
-          --batch-size $batch_size
           --GAT-heads $nhead
           --GAT-atten-layer $atten_layer
           --GAT-out-atten-layer $out_atten_layer

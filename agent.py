@@ -1,4 +1,4 @@
-from models import GAT, GAT_degree, GAT_degree2, GAT_origin, GAT_MLP
+from models import GAT, GAT_degree, GAT_degree2, GAT_origin, GAT_MLP, MLP
 import torch
 import numpy as np
 import random
@@ -105,7 +105,7 @@ class DQAgent:
                                         alpha, nhead, self.merge_z, True,
                                         self.use_cuda, self.device, method=self.method)
             elif self.nnmodel == "v01":
-                mlp_layer = 1
+                mlp_layer = 3
                 mlp_hid = 10
                 self.policy_model = GAT_MLP(mlp_layer, mlp_hid, layer_tp, self.node_features_dims,
                                     hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
@@ -118,7 +118,11 @@ class DQAgent:
                         layer_type="default")
                 self.target_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha,
                                                nheads=nhead, layer_type="default")
-
+            elif self.nnmodel == "v5":
+                layers = 3
+                self.policy_model = MLP(layers, 16, 3, 1)
+                self.target_model = MLP(layers, 16, 3, 1)
+                
 
             if self.use_cuda:
                 self.policy_model.to(self.device)
@@ -216,6 +220,8 @@ class DQAgent:
                     if not isinstance(input_node_feat, torch.Tensor):
                         input_node_feat = torch.Tensor(input_node_feat)
                     q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device))
+                elif self.nnmodel == "v5":
+                    q_a = self.policy_model(input_node_feat.to(self.device))
                 else:
 
                     q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
@@ -352,6 +358,8 @@ class DQAgent:
                     q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
                                             torch.Tensor(state).to(self.device), None,
                                             z=hyper.to(self.device))
+                elif self.nnmodel == "v5":
+                    q_a = self.policy_model(node_feature.to(self.device))
                 else:
                     q_a = self.policy_model(node_feature.to(self.device), adj.to(self.device),
                                             torch.Tensor(state).to(self.device), self.s_mat.to(self.device),
@@ -384,6 +392,8 @@ class DQAgent:
                     q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
                                             torch.Tensor(next_state).to(self.device), None,
                                             z=hyper.to(self.device))
+                elif self.nnmodel == "v5":
+                    q_target = self.target_model(node_feature.to(self.device))
                 else:
                     q_target = self.target_model(node_feature.to(self.device), self.adj.to(self.device),
                                         torch.Tensor(next_state).to(self.device), self.s_mat.to(self.device),

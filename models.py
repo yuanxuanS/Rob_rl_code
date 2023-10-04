@@ -186,6 +186,7 @@ class attentions_struc(nn.Module):
             layer = GraphAttentionLayer_struc(in_dim, out_dim, in_dim_s, out_dim_s, self.alpha, concat=concat, mergeZ=self.mergeZ,
                                         node_dim=self.node_dim, method=method)
             self.attention.append(layer)
+            self.add_module('struc_attention_layer_{}'.format(i), layer)
 
     def forward(self, x, adj, s_mat, z=None):
         h = x
@@ -703,7 +704,7 @@ class GAT_struc(nn.Module):
 
         for i, attention in enumerate(self.attentions_struc):
             # print(f"第{i}个layer, {str(attention)}")
-            self.add_module('attention_{}'.format(i), attention)
+            self.add_module('struc_attention_{}'.format(i), attention)
 
         # GAT 区别：h_struc把多头的结果拼接起来，所以是nhid * nheads; h不拼接
         #################
@@ -764,32 +765,35 @@ class GAT_struc(nn.Module):
 
         return result
 
-# layer = (2, 2)
-# features_dim = 3
-# hidden_dim = ((8,3,), (16, 5))
-# alpha = 0.2     # leakyReLU的alpha
-# nhead = 2
-# node_nbr = 10
-# graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
+'''
+layer = (2, 2)
+features_dim = 3
+hidden_dim = ((8,3,), (16, 5))
+alpha = 0.2     # leakyReLU的alpha
+nhead = 2
+node_nbr = 10
+graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
 #
-# nfeat_s = node_nbr
-# hidden_dim_s = ((8,3,), (16, 4))
-# model = GAT_degree("v2", node_nbr, layer, nfeat=features_dim, nhid_tuple=hidden_dim, nfeat_s=nfeat_s, nhid_s_tuple=hidden_dim_s,alpha=alpha, nheads=nhead,
-#             mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
+nfeat_s = node_nbr
+hidden_dim_s = ((8,3,), (16, 4))
+model = GAT_degree("v3", node_nbr, layer, nfeat=features_dim, nhid_tuple=hidden_dim, nfeat_s=nfeat_s, nhid_s_tuple=hidden_dim_s,alpha=alpha, nheads=nhead,
+            mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
 # # # # test
 #
-# adj_matrix = graph.adj_matrix
+adj_matrix = graph.adj_matrix
 # # # print(f"graph adj matrix {graph.adj_matrix}")
-# adj_matrix = torch.Tensor(adj_matrix)
-# xv = generate_node_feature(graph, features_dim)
+adj_matrix = torch.Tensor(adj_matrix)
+xv = generate_node_feature(graph, features_dim)
 # # # print(f"node feature vector size {xv.size()}")     # [0-100]
-# xv = torch.Tensor(xv)       # torch的输入必须是tensor
+xv = torch.Tensor(xv)       # torch的输入必须是tensor
 #
-# s_mat = graph.adm
-# y = model(xv, adj_matrix, None, s_mat, None)
-# print(f"y size {y.size()}")
-
+s_mat = graph.adm
+y = model(xv, adj_matrix, None, s_mat, None)
+print(f"y size {y.size()}")
+for name, param in model.named_parameters():
+    print(f"this layer: {name}, required grad: {param.requires_grad}")
 # print(f"get y from GAT is {y}")     # [n, 1]
+'''
 
 class GAT_MLP(nn.Module):
     def __init__(self, mlp_layers, nhid, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
@@ -805,30 +809,32 @@ class GAT_MLP(nn.Module):
         h = self.mlp(h_)
 
         return h
+'''
+layer = (1, 1)
+features_dim = 3
+hidden_dim = ((16,), (8,))
+alpha = 0.2     # leakyReLU的alpha
+nhead = 2
+node_nbr = 10
+graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
 
-# layer = (1, 1)
-# features_dim = 3
-# hidden_dim = ((16,), (8,))
-# alpha = 0.2     # leakyReLU的alpha
-# nhead = 2
-# node_nbr = 10
-# graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
-
-# mlp_layer = 1
-# mlp_hid = 10
-# model = GAT_MLP(mlp_layer, mlp_hid, layer, nfeat=features_dim, nhid_tuple=hidden_dim, 
-#             alpha=alpha, nheads=nhead,
-#             mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
+mlp_layer = 1
+mlp_hid = 10
+model = GAT_MLP(mlp_layer, mlp_hid, layer, nfeat=features_dim, nhid_tuple=hidden_dim, 
+            alpha=alpha, nheads=nhead,
+            mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
 # # # test
 #
-# adj_matrix = graph.adj_matrix
+adj_matrix = graph.adj_matrix
 # # # print(f"graph adj matrix {graph.adj_matrix}")
-# adj_matrix = torch.Tensor(adj_matrix)
-# xv = generate_node_feature(graph, features_dim)
-# xv = torch.Tensor(xv)       # torch的输入必须是tensor
+adj_matrix = torch.Tensor(adj_matrix)
+xv = generate_node_feature(graph, features_dim)
+xv = torch.Tensor(xv)       # torch的输入必须是tensor
 # print(f"node feature vector size {xv.size()}")     # [0-100]
 #
-# y = model(xv, adj_matrix, None, None)
-# print(f"y size {y.size()}")
-
+y = model(xv, adj_matrix, None, None)
+print(f"y size {y.size()}")
+for name, param in model.named_parameters():
+    print(f"this layer: {name}, required grad: {param.requires_grad}")
 # print(f"get y from GAT is {y}")     # [n, 1]
+'''

@@ -546,7 +546,7 @@ class PPOContinuousAgent:
                                             observe_state=self.observe_state, use_cuda=self.use_cuda,
                                             device=self.device,
                                             method=self.method)  # 从n个中随意选一个分布
-            elif (self.nnmodel == "v4") or (self.nnmodel == "v01") or (self.nnmodel == "v0"):
+            elif (self.nnmodel == "v4") or (self.nnmodel == "v01") or (self.nnmodel == "v0")or (self.nnmodel == "v5"):
 
                 self.critic = GATValueNet(self.node_nbr, layer_tp, self.node_features_dims + self.node_nbr, hid_dim_tp, alpha,
                                           nhead, mergeZ=self.merge_z,

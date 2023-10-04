@@ -37,6 +37,8 @@ class Environment(object):
         self.state = None
         self.done = False
 
+        self.reward_last = 0.
+        self.std_last = 0.
         # print(f"state dim is {self.state.ndim}")
         ##  test
         self.print_tag = "ENV---"
@@ -106,7 +108,10 @@ class Environment(object):
         # print("seeds is {}".format(seeds))
         # 蒙特卡洛得到influence reward
         ccwn_st = time.time()
-        influence_without, std_without = self.run_cascade(seeds=seeds_set)
+        if i > 0:
+            influence_without, std_without = self.reward_last, self.std_last
+        else:
+            influence_without, std_without = self.run_cascade(seeds=seeds_set)
         ccwn_ed = time.time()
 
         print(f"time of repeat cascade is {ccwn_ed - ccwn_st}")
@@ -115,6 +120,8 @@ class Environment(object):
 
         ccw_st = time.time()
         influence_with, std_with = self.run_cascade(seeds=seeds_set)
+        self.reward_last = influence_with
+        self.std_last = std_with
         ccw_ed = time.time()
         print(f"time of IC, more 1 node, is {ccw_ed - ccw_st}")
         logging.debug(f"simulation: seed set- {seeds_set}, mean is {influence_with}, std is {std_with}")

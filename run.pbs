@@ -1,9 +1,9 @@
 #! /usr/bin/bash -e
 #PBS -l walltime=72:00:00
 #PBS -l nodes=1:vortex:ppn=12
-#PBS -N p925_8bs_v01_200_1g
+#PBS -N p103_v01_3MLP
 #PBS -j oe
 source /sciclone/home/pwang12/vir/test_env/bin/activate
 cd /sciclone/home/pwang12/src
-bash run.sh 200 8 1000 1 1707
+bash run.sh 200 8 2000 1 1452
 
