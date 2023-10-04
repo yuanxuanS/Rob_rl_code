@@ -6,6 +6,7 @@ import networkx as nx
 import logging
 
 import pandas as pd
+import multiprocessing
 
 def runIC(G, S, p=None):
     ''' Runs independent cascade model.
@@ -54,3 +55,33 @@ def runIC_repeat(G, S, p=None, sample=5):
 
     return infl_mean, infl_std 
 
+def worker_func(G, S, p, sample, result_queue):
+    infl_mean, infl_std = runIC_repeat(G, S, p, sample)
+    result_queue.put((infl_mean, infl_std))
+
+def parallel_runIC_repeat(G, S, p=None, sample=5, num_processes=4):
+    result_queue = multiprocessing.Queue()
+    processes = []
+
+    for _ in range(num_processes):
+        process = multiprocessing.Process(target=worker_func, args=(G, S, p, sample, result_queue))
+        processes.append(process)
+        process.start()
+
+    for process in processes:
+        process.join()
+
+    infl_means = []
+    infl_stds = []
+
+    while not result_queue.empty():
+        infl_mean, infl_std = result_queue.get()
+        infl_means.append(infl_mean)
+        infl_stds.append(infl_std)
+
+    return np.mean(infl_means), np.mean(infl_stds)
+
+
+# infl_mean, infl_std = parallel_runIC_repeat(G, S, p, sample, num_processes=4)
+# print(f"Average Influence Mean: {infl_mean}")
+# print(f"Average Influence Std: {infl_std}")

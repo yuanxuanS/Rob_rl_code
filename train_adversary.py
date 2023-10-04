@@ -31,8 +31,10 @@ parser.add_argument("--logtime", type=str, default="")
 parser.add_argument("--graph-pool-nbr", type=int, default=1)
 parser.add_argument("--train-graph-nbr", type=int, default=1)
 parser.add_argument("--valid-graph-nbr", type=int, default=4)
+parser.add_argument("--graph-type", type=str, default="")
 parser.add_argument("--nodes", type=int, default=100)
 parser.add_argument("--budget", type=int, default=4)
+parser.add_argument("--use-record", type=bool, default=False)
 
 parser.add_argument("--valid-with-nature", type=bool, default=False)      # random or rl_nature, hyperparams generation way in validation
 parser.add_argument("--edge-p", type=float, default=0.1)
@@ -93,11 +95,11 @@ def setup_logger(path):
     return log
 # sys.stdout = open(os.devnull, 'w')
 
-def load_graph(graph_nbr_train, node_nbr, node_edge_p, logdir, logtime):
+def load_graph(graph_type, graph_nbr_train, node_nbr, node_edge_p, logdir, logtime):
     graph_dic = {}
     for graph_ in range(graph_nbr_train):
         seed = graph_
-        G = Graph_IM(nodes=node_nbr, edges_p=node_edge_p, seed=seed)
+        G = Graph_IM(graph_type, nodes=node_nbr, edges_p=node_edge_p, seed=seed)
         graph_dic[graph_] = G
         graph_dic[graph_].graph_name = str(graph_)
         # degree
@@ -142,7 +144,8 @@ def gener_z(node_dim, z_nbr, z_mean):
 
 
 # env : pools
-env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
+env_setting = {"graph_type": args.graph_type,
+                "graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
                "train_graph_nbr": args.train_graph_nbr,  # number of training graphs in pool
                "valid_graph_nbr": args.valid_graph_nbr,  # number of validation graphs in pool
                "feat_pool_n": args.feat_pool_nbr,  # number of trained features in pool
@@ -152,7 +155,8 @@ env_setting = {"graph_pool_n": args.graph_pool_nbr,  # number of  graphs in pool
                "z_mean": 0.5,
                "nodes": args.nodes,  # number of graph nodes
                "edge_p": args.edge_p,
-               "budgets": args.budget
+               "budgets": args.budget,
+               "use_record": args.use_record    # whether use last record in IC simulation
                }
 
 # main agent 's training settings
@@ -223,7 +227,7 @@ device_setting = {
 
 
 gen_grh_st = time.time()
-graph_pool = load_graph(env_setting["graph_pool_n"], env_setting["nodes"], env_setting["edge_p"], args.logdir, args.logtime)
+graph_pool = load_graph(env_setting["graph_type"], env_setting["graph_pool_n"], env_setting["nodes"], env_setting["edge_p"], args.logdir, args.logtime)
 node_feat_pool = gener_node_features(env_setting["nodes"], env_setting["node_feat_dims"], env_setting["feat_pool_n"], env_setting["node_feat_normal_mean"])
 z_pool = gener_z(env_setting["node_feat_dims"], env_setting["z_pool_n"], env_setting["z_mean"])
 gen_grh_ed = time.time()
@@ -248,7 +252,7 @@ update_target_steps = 5       # copy policy_model -> target model
 def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
     logger.info(f"this seed is {this_seed}, pid is {os.getpid()}")
     # initialize
-    env = Environment(graph_pool, node_feat_pool, z_pool, env_setting["budgets"])  #
+    env = Environment(graph_pool, node_feat_pool, z_pool, env_setting["budgets"], env_setting["use_record"])  #
     nature_agent = PPOContinuousAgent(graph_pool, node_feat_pool, z_pool,
                                       nature_setting,
                                       env_setting["nodes"], env_setting["node_feat_dims"],
