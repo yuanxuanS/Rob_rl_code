@@ -118,7 +118,7 @@ class Runner:
 
             if self.test_mem:
                 self.test_memory()
-                logging.debug(f"before interact, memory size {sys.getsizeof(self.agent.memory)}")
+                # logging.debug(f"before interact, memory size {sys.getsizeof(self.agent.memory)}")
 
             # sample node feature
             ft_id = 0
@@ -319,7 +319,7 @@ class Runner:
             if self.test_mem:
                 logging.debug(f"tensorboard writer part:")
                 self.test_memory()
-                logging.debug(f"agent size: {sys.getsizeof(self.agent)}; env size:{sys.getsizeof(self.environment)}; ")
+                # logging.debug(f"agent size: {sys.getsizeof(self.agent)}; env size:{sys.getsizeof(self.environment)}; ")
         # utils.draw_distri_hist(self.cumu_reward, self.path, "cumu_reward")
 
     def final_valid(self):
