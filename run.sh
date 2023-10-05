@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # bash run.sh 100 4 100 3 1037
 # set -vx
+graph_type="erdos_renyi"  #"powerlaw"
 nodes=$1
 budget=$2
 episode=$3
@@ -47,6 +48,7 @@ do
       do
         if [ $with_nature = "True" ]; then
           COMMAND="python3 -u train_adversary.py --nodes $nodes --budget $budget
+          --graph-type $graph_type
           --graph-pool-nbr $graph_pn --train-graph-nbr $g_train_nbr --valid-graph-nbr $g_valid_nbr
            --edge-p $edge_p --main-method $main_method
           --train-episodes $episode --valid-episodes $valid_episodes
@@ -65,6 +67,7 @@ do
           --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/${runtime}_n.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_n_error.txt &"
         else
           COMMAND="python3 -u train_adversary.py --nodes $nodes --budget $budget
+          --graph-type $graph_type
           --graph-pool-nbr $graph_pn --train-graph-nbr $g_train_nbr --valid-graph-nbr $g_valid_nbr
           --valid-with-nature $valid_with_nature --edge-p $edge_p --main-method $main_method
           --train-episodes $episode --valid-episodes $valid_episodes
