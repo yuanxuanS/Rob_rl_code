@@ -198,7 +198,7 @@ class DQAgent:
         self.global_step += 1
         # policy
         if self.model_name == 'GAT_QN':
-            if self.use_decay:
+            if self.use_decay > 0:
                 self.curr_epsilon = self.epsilon_decay(self.init_epsilon, self.final_epsilon, self.global_step, self.epsilon_decay_steps)
             else:
                 self.curr_epsilon = self.init_epsilon

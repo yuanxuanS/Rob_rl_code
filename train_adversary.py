@@ -171,6 +171,7 @@ main_setting = {
     "nheads": args.GAT_heads,
     "alpha": args.alpha,
     "gamma": args.gamma,
+    "use_decay": 0,         # 0 not use, 1 use
     "init_epsilon": args.init_epsilon,
     "final_epsilon": args.final_epsilon,
     "epsilon_decay_steps": args.epsilon_decay_steps,
