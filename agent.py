@@ -328,10 +328,10 @@ class DQAgent:
             gid_batch = []
             ftid_batch = []
             hyid_batch= []
-        # return batch
-        return state_batch, action_batch, reward_batch, next_state_batch, feasible_batch, done_batch, gid_batch, ftid_batch, hyid_batch
+        return batch
+        # return state_batch, action_batch, reward_batch, next_state_batch, feasible_batch, done_batch, gid_batch, ftid_batch, hyid_batch
 
-    def update(self, i):
+    def update(self, global_step):
         # 采样batch更新policy_model
         # 从memory中采样
         if self.test_mem:
@@ -555,8 +555,8 @@ class DQAgent:
             h.remove()
 
         # 每 C step，更新目标网络 = 当前的行为网络
-        if i % self.copy_model_steps == 0:
-            # logging.debug(f"reload target model, policy model params: {self.policy_model.state_dict()}\n target model param: {self.target_model.state_dict()}")
+        if global_step % self.copy_model_steps == 0:
+            logging.debug(f"reload target model from policy model ")
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())  #
             # logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
