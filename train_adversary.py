@@ -57,7 +57,8 @@ parser.add_argument("--alpha", type=float, default=0.2)
 parser.add_argument("--seed-nbr", type=int, default=3)
 parser.add_argument("--gamma", type=float, default=0.99)
 
-parser.add_argument("--init-epsilon", type=float, default=0.)
+parser.add_argument("--use-decay", type=int, default=0, help="1 if use epsilon deccay else 0")
+parser.add_argument("--init-epsilon", type=float, default=0.3)
 parser.add_argument("--final-epsilon", type=float, default=0.)
 parser.add_argument("--epsilon-decay-steps", type=int, default=1000)
 
@@ -171,7 +172,7 @@ main_setting = {
     "nheads": args.GAT_heads,
     "alpha": args.alpha,
     "gamma": args.gamma,
-    "use_decay": 0,         # 0 not use, 1 use
+    "use_decay": args.use_decay,         # 0 not use, 1 use
     "init_epsilon": args.init_epsilon,
     "final_epsilon": args.final_epsilon,
     "epsilon_decay_steps": args.epsilon_decay_steps,

@@ -34,6 +34,7 @@ class Runner:
         self.nature_actor_loss = []
         self.main_loss = []
 
+        self.check_epi_step = 20
         self.global_iter = 0
 
 
@@ -84,7 +85,7 @@ class Runner:
                     state, feasible_action = self.environment.get_seed_state()  # [1, N]
                     action = self.agent.act(state, feasible_action, "valid")
                     logging.info(f"main agent action is {action} ")
-                    next_state, reward, done = self.environment.step_seed(i, action)
+                    next_state, reward, done = self.environment.step_seed(i, action, "valid")
                     logging.info(f"get reward is {reward}")
 
 
@@ -105,12 +106,24 @@ class Runner:
         self.test_mem = True
         self.test_time = True
         for episode in range(self.training_setting["train_episodes"]):  # one-step, adversary is a bandit
+            
+            # validation
+            if self.global_iter % self.check_epi_step == 0:
+                g_episode_returns = self.valid()     
+                g_mean_returns = np.mean(g_episode_returns, axis=1)
+
+                for r in range(self.env_setting["valid_graph_nbr"]):
+                    g_id = self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] + r
+                    self.writer.add_scalar(f"valid in graph: {g_id}/ with nature: {self.valid_setting['with_nature']}", g_mean_returns[r], self.global_iter)
+
+
             self.global_iter += 1
-           
+
+
             if self.test_time:
                 epi_st = time.time()
             # sample graph
-            g_id = random.randint(0, self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] - 1)
+            g_id = random.randint(0, self.env_setting["train_graph_nbr"] - 1)        # [ ]
             self.environment.init_graph(g_id)
             self.nature.init_graph(g_id)
             self.agent.init_graph(g_id)
@@ -205,7 +218,7 @@ class Runner:
                 logging.info(f"curr seed set is {infeasible_action}, main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
 
                 
-                next_state, reward, done = self.environment.step_seed(i, action)
+                next_state, reward, done = self.environment.step_seed(i, action, "train")
                 logging.info(f"get reward is {reward}")
 
                 if self.test_mem:
@@ -245,7 +258,7 @@ class Runner:
                     logging.info(f"now update the main agent")
                     if self.test_time:
                         upd_st = time.time()
-                    loss = self.agent.update(i)
+                    loss = self.agent.update(self.global_iter)
                     
                     if self.test_mem:
                         self.test_memory()
