@@ -96,7 +96,7 @@ class Environment(object):
         self.state[0, action_node] = 1
         return self.state
 
-    def step_seed(self, i, main_action):
+    def step_seed(self, i, main_action, mode):
         '''
         计算reward并且进行state update, reward-marginal contribution
         :param action: node下标
@@ -109,11 +109,17 @@ class Environment(object):
         seeds_set = [v for v in range(self.N) if self.state[0][v] == 1]
         # print("seeds is {}".format(seeds))
         # 蒙特卡洛得到influence reward
+
+        if mode == "train":
+            sample=5
+        elif mode == "valid":
+            sample=20
+            # logging.info(f"valid, sample {sample} times")
         ccwn_st = time.time()
         if i > 0 and self.use_record:
             influence_without, std_without = self.reward_last, self.std_last
         else:
-            influence_without, std_without = self.run_cascade(seeds=seeds_set)
+            influence_without, std_without = self.run_cascade(seeds_set, sample)
         ccwn_ed = time.time()
 
         print(f"time of repeat cascade is {ccwn_ed - ccwn_st}")
@@ -121,7 +127,7 @@ class Environment(object):
         seeds_set.append(main_action)  ################# main_action 是tensor
 
         ccw_st = time.time()
-        influence_with, std_with = self.run_cascade(seeds=seeds_set)
+        influence_with, std_with = self.run_cascade(seeds_set, sample)
         if self.use_record:
             self.reward_last = influence_with
             self.std_last = std_with
@@ -153,13 +159,13 @@ class Environment(object):
         # print(f"{self.print_tag} after add {self.z}")
         return self.z
 
-    def run_cascade(self, seeds):
+    def run_cascade(self, seeds, sample):
         # reward, _ = runIC_repeat(self.g, seeds, p=self.propagate_p_matrix)
         self.IC_mp = False
         if not self.IC_mp:
-            reward, std = runIC_repeat(self.g, seeds, p=None)
+            reward, std = runIC_repeat(self.g, seeds, None, sample)
         else:
-            reward, std = parallel_runIC_repeat(self.g, seeds, p=None)
+            reward, std = parallel_runIC_repeat(self.g, seeds, None, sample)
         
 
         return reward, std
