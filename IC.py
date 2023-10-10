@@ -45,6 +45,8 @@ def runIC_repeat(G, S, p=None, sample=5):
     if len(S) == 0:
         # print(f"{print_tag} no seed to influence")
         return 0., 0.
+
+    # logging.info(f"repeat time : {sample}")
     for i in range(sample):
         T = runIC(G, S, p=p)
         influence = len(T)     # 最后的影响力值为激活的node总数, 包括seed set
