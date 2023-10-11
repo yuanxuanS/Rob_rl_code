@@ -86,7 +86,7 @@ class Environment(object):
         # available_action_mask = np.array([1] * self.G.cur_n)
         feasible_action = [idx for idx in range(len(self.state[0])) if self.state[0][idx] == 0]
         # print(f"{self.print_tag} feasible actions are {feasible_action}")
-        return self.state, feasible_action
+        return self.state.copy(), feasible_action
 
     def get_z_state(self):
         return self.z
@@ -94,7 +94,7 @@ class Environment(object):
     def transition(self, action_node):
         # action_node为选择的一个节点，为节点的index，根据action更新state
         self.state[0, action_node] = 1
-        return self.state
+        return self.state.copy()
 
     def step_seed(self, i, main_action, mode):
         '''
