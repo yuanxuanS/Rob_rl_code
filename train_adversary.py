@@ -186,6 +186,7 @@ main_setting = {
     "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim), # final one must be 1
     "GAT_s_hid_dim": ast.literal_eval(args.GAT_s_hid_dim),
     "GAT_s_out_hid_dim": ast.literal_eval(args.GAT_s_out_hid_dim),
+    "er": 1000
 }
 
 nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)

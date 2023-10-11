@@ -238,6 +238,9 @@ class Runner:
                 if self.main_setting["agent_method"] == 'rl':
                     logging.info(f"main agent method is reinforcement learning")
                     sample = [state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id]
+                    # logging.info(f"sample to remember: \n state is {state} \n action is {action}\n  \
+                    # reward is {reward} \n next_state is {next_state} \n feasible action is {feasible_action}\n \
+                    # done is {done} ")
                     self.agent.remember(sample)
                 elif self.main_setting["agent_method"] == 'random':
                     pass
@@ -275,7 +278,7 @@ class Runner:
                     pass
                 if self.test_mem:
                     self.test_memory()
-                    logging.debug(f"after interact, memory size {utils.get_size(self.agent.memory)}")
+                    # logging.debug(f"after interact, memory size {utils.get_size(self.agent.memory)}")
 
                 # print(prof.key_averages().table(sort_by="self_cpu_memory_usage", row_limit=10))
 
