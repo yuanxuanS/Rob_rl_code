@@ -8,6 +8,7 @@ import logging
 from graphviz import Digraph
 from torchviz import make_dot, make_dot_from_trace
 from torch.profiler import profile, record_function, ProfilerActivity
+from er import ER
 from utils import test_memory
 seed = seed.get_value()
 torch.manual_seed(seed)
@@ -58,8 +59,9 @@ class DQAgent:
         self.target_model = None
 
         # buffer
-        self.memory = []
-        self.buffer_max = 500  # equal to global iterations
+        self.buffer = ER(main_setting["er"])
+        # self.memory = []
+        # self.buffer_max = 500  # equal to global iterations
 
         # train args
         self.basic_batch_size = train_batch
@@ -295,17 +297,17 @@ class DQAgent:
         :param sample_lst: [state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id]
         :return:
         '''
-        self.memory.append(sample_lst)
+        self.buffer.append(sample_lst)
 
     def get_sample(self):
 
         # self.train_batch_size = int((1 + len(self.memory) / self.buffer_max) * self.basic_batch_size)
         self.train_batch_size = self.basic_batch_size
 
-        if len(self.memory) > self.train_batch_size:
+        if len(self.buffer) > self.train_batch_size:
 
-            batch = random.sample(self.memory, self.train_batch_size)
-            # print(f"{self.print_tag} batch is {batch}")
+            batch, idxs, _ = self.buffer.sample(self.train_batch_size)
+            # logging.info(f"{self.print_tag} batch is {batch}")
             # print(f" zip is {list(zip(*batch))}")
             state_batch = list(torch.Tensor(list(zip(*batch))[0]))
             # print(f"state batch is {state_batch}")
@@ -364,6 +366,9 @@ class DQAgent:
 
             
             state, action, reward, next_state, feasible_a, done, g_id, ft_id, hyper_id = transition
+            # logging.info(f"state\n{state}\naction\n{action}\nreward\n{reward}\nnext_state\n{next_state} \
+            #     feasible_\n {feasible_a} \n gid_\n {g_id} \n ftid_ {ft_id} \n hyid_ {hyper_id}")
+        
             # 用目标网络计算目标值y
             graph = self.graphs[g_id]
             adj = torch.Tensor(graph.adj_matrix)
