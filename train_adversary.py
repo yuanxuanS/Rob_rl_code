@@ -64,6 +64,7 @@ parser.add_argument("--epsilon-decay-steps", type=int, default=1000)
 
 parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--rl-algor", type=str, default="DQN")
+parser.add_argument("--buffer-type", type=str, default="er")
 parser.add_argument("--nnVersion", type=str, default="v1")
 
 #
@@ -177,6 +178,7 @@ main_setting = {
     "final_epsilon": args.final_epsilon,
     "epsilon_decay_steps": args.epsilon_decay_steps,
     "lr": args.lr,
+    "buffer_type": args.buffer_type,
     "rl_algor": args.rl_algor,      # "DQN"
     "nnVersion": args.nnVersion,
     "GAT_mtd": "base",  # "aggre_degree", # "base': original GAT attention
@@ -186,7 +188,7 @@ main_setting = {
     "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim), # final one must be 1
     "GAT_s_hid_dim": ast.literal_eval(args.GAT_s_hid_dim),
     "GAT_s_out_hid_dim": ast.literal_eval(args.GAT_s_out_hid_dim),
-    "er": 1000
+    "er": 100000
 }
 
 nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)
