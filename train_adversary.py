@@ -21,7 +21,7 @@ import logging
 import ast
 
 
-log_dir_global = "log_5"
+log_dir_global = "log_test"
 
 parser = argparse.ArgumentParser()
 # log setting
@@ -64,7 +64,7 @@ parser.add_argument("--epsilon-decay-steps", type=int, default=1000)
 
 parser.add_argument("--lr", type=float, default=1e-3)
 parser.add_argument("--rl-algor", type=str, default="DQN")
-parser.add_argument("--buffer-type", type=str, default="er")
+parser.add_argument("--buffer-type", type=str, default="per_td_return")
 parser.add_argument("--nnVersion", type=str, default="v1")
 
 #
@@ -148,6 +148,19 @@ def gener_z(node_dim, z_nbr, z_mean):
 
 
 
+# other training setting
+training_setting = {
+    "with_nature": args.with_nature,
+    "train_episodes": args.train_episodes,
+    "valid_episodes": args.valid_episodes,
+    "valid_every": args.valid_every
+
+}
+
+valid_setting = {
+    "with_nature": args.valid_with_nature
+}
+
 
 # env : pools
 env_setting = {"graph_type": args.graph_type,
@@ -188,7 +201,7 @@ main_setting = {
     "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim), # final one must be 1
     "GAT_s_hid_dim": ast.literal_eval(args.GAT_s_hid_dim),
     "GAT_s_out_hid_dim": ast.literal_eval(args.GAT_s_out_hid_dim),
-    "er": 100000
+    "er": args.budget*args.train_episodes       # capacity of buffer
 }
 
 nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)
@@ -215,18 +228,7 @@ nature_setting = {
     "critic_lr": args.lr
 }
 
-# other training setting
-training_setting = {
-    "with_nature": args.with_nature,
-    "train_episodes": args.train_episodes,
-    "valid_episodes": args.valid_episodes,
-    "valid_every": args.valid_every
 
-}
-
-valid_setting = {
-    "with_nature": args.valid_with_nature
-}
 
 # gpu
 

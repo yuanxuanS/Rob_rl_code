@@ -31,7 +31,7 @@ class SumTree:
         self.capacity = capacity
         self.tree = np.zeros(2 * capacity - 1)
         self.data = np.zeros(capacity, dtype=object)        # 按照append顺序存对应的数据
-        self.n_entries = 0
+        self.n_entries = 0      # 叶节点，即样本个数
         self.write = 0
     
     # update to the root node

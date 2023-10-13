@@ -1,4 +1,8 @@
-
+import math
+import random
+import numpy as np
+from sumtree import SumTree
+import logging
 
 class PER:
     def __init__(self, capacity=1000000, e=0.01, a=0.6, beta=0.4, beta_increment_per_sampling=0.001):
@@ -8,7 +12,7 @@ class PER:
         self.a = 0.6
         self.beta = 0.4
         self.beta_increment_per_sampling = 0.001
-    
+        logging.info(f"get params done")
     def __init_tree(self):
         self.tree = SumTree(self.capacity)
 
@@ -50,11 +54,11 @@ class PER:
             idxs.append(idx)
 
         #print('[INFO] all priorities', self.tree.tree)
-        sampling_probabilities = priorities / self.tree.total()     # 把这些优先级归一化
+        sampling_probabilities = priorities / self.tree.total()     # 把这些优先级归一化，即为采样概率
         #print('[INFO] sampling_priorities: ', sampling_probabilities)
         is_weight = np.power(self.tree.n_entries * sampling_probabilities, -self.beta)
         #print('[INFO] is_weight: ', is_weight)
-        is_weight /= is_weight.max()
+        is_weight /= is_weight.max()        # 该batch中每个transition的weight在计算时，要在当前batch的weights中归一化
 
         return batch, idxs, is_weight
 

@@ -9,6 +9,7 @@ from graphviz import Digraph
 from torchviz import make_dot, make_dot_from_trace
 from torch.profiler import profile, record_function, ProfilerActivity
 from er import ER
+from per import PER
 from utils import test_memory
 seed = seed.get_value()
 torch.manual_seed(seed)
@@ -59,7 +60,19 @@ class DQAgent:
         self.target_model = None
 
         # buffer
-        self.buffer = ER(main_setting["er"])
+        from utils import process_config
+        config = process_config(0, 0, 0)
+        self.buffer_type = main_setting["buffer_type"]
+        if self.buffer_type == "er":
+            self.buffer = ER(main_setting["er"])
+        elif self.buffer_type == "per_return":
+            self.buffer = PER(**config["per_return"])
+        elif self.buffer_type == "per_td":
+            self.buffer = PER(**config["per_td"])
+        elif self.buffer_type == "per_td_return":
+            self.buffer = PER(**config["per_td_return"])
+            self.td_reward_w = config["td_reward_weight"]
+
         # self.memory = []
         # self.buffer_max = 500  # equal to global iterations
 
@@ -69,6 +82,7 @@ class DQAgent:
 
         self.gamma = main_setting["gamma"]
         self.criterion = torch.nn.MSELoss(reduction='mean')
+        
         self.copy_model_steps = update_target_steps
         self.lr = main_setting["lr"]
 
@@ -297,7 +311,59 @@ class DQAgent:
         :param sample_lst: [state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id]
         :return:
         '''
-        self.buffer.append(sample_lst)
+        @torch.no_grad()
+        def calculate_td_error(obs, action, reward, next_obs, feasible_action, done, g_id, ft_id, hyper_id):
+            #using is the absolute error, not square error
+            graph = self.graphs[g_id]
+            adj = torch.Tensor(graph.adj_matrix)
+            node_feature = torch.Tensor(self.node_feat_pool[ft_id])
+            hyper = torch.Tensor(self.hyper_pool[hyper_id])
+            infeasible_action = [k for k in range(self.graph.node) if k not in feasible_action]
+
+            # logging.info(f"state\n{obs}\naction\n{action}\nreward\n{reward}\nnext_state\n{next_obs} \
+            #     feasible_\n {feasible_action} \n gid_\n {g_id} \n ftid_ {ft_id} \n hyid_ {hyper_id}")
+        
+            if self.algor == "DDQN":
+                qvalues = self.policy_model(node_feature.to(self.device), adj.to(self.device),
+                                            (torch.Tensor(obs)).to(self.device), torch.Tensor(self.s_mat).to(self.device),
+                                            z=hyper.to(self.device))
+                # logging.info(f"qvalues are {qvalues}")
+                prediction = qvalues[action]
+                # logging.info(f"prediction are {prediction}")
+
+                target_val = self.target_model(node_feature.to(self.device), adj.to(self.device),
+                                        torch.Tensor(next_obs).to(self.device), torch.Tensor(self.s_mat).to(self.device),
+                                        z=hyper.to(self.device))
+                # logging.info(f"target values are {target_val}")
+
+                q_a_tmp = qvalues.clone()  # 深拷贝，不能改变原值
+                q_a_tmp[infeasible_action] = -9e15
+                # logging.info(f"q a, after mask: \n{q_a_tmp}")
+                policy_max_action = q_a_tmp.argmax()
+                # logging.info(f"policy max action is {policy_max_action}")
+                # logging.info(f"q_target[max] is {target_val[policy_max_action]}")
+                target = reward + (1 - done) * self.gamma * target_val[policy_max_action]
+
+
+            priority_value = abs(target - prediction).item()
+            # logging.info(f"target is {target} , prediction is {prediction}, prior is {priority_value}")
+            return priority_value
+        
+        if self.buffer_type == "er":
+            priority_value = 0
+        else:
+            state, action, reward, next_state, feasible_action, done, g_id, ft_id, hyper_id = sample_lst
+            if self.buffer_type == "per_td":
+                priority_value = calculate_td_error(state, action, reward, next_state, feasible_action,
+                                done, g_id, ft_id, hyper_id)
+            elif self.buffer_type == "per_return":
+                priority_value = reward
+            elif self.buffer_type == "per_td_return":
+                td_error = calculate_td_error(state, action, reward, next_state, feasible_action,
+                                done, g_id, ft_id, hyper_id)
+                priority_value = abs(td_error) + self.td_reward_w * reward
+                # logging.info(f"td error is {td_error}, w {self.td_reward_w}, reward {reward}, pri {priority_value}")
+        self.buffer.append(sample_lst, priority_value)
 
     def get_sample(self):
 
@@ -306,7 +372,7 @@ class DQAgent:
 
         if len(self.buffer) > self.train_batch_size:
 
-            batch, idxs, _ = self.buffer.sample(self.train_batch_size)
+            batch, idxs, is_weight = self.buffer.sample(self.train_batch_size)
             # logging.info(f"{self.print_tag} batch is {batch}")
             # print(f" zip is {list(zip(*batch))}")
             state_batch = list(torch.Tensor(list(zip(*batch))[0]))
@@ -330,7 +396,9 @@ class DQAgent:
             gid_batch = []
             ftid_batch = []
             hyid_batch= []
-        return batch
+            idxs = []
+            is_weight = []
+        return batch, idxs, is_weight
         # return state_batch, action_batch, reward_batch, next_state_batch, feasible_batch, done_batch, gid_batch, ftid_batch, hyid_batch
 
     def update(self, global_step):
@@ -339,7 +407,8 @@ class DQAgent:
         if self.test_mem:
             test_memory()   
         
-        batch = self.get_sample()
+        batch, idxs, is_weight = self.get_sample()
+        # logging.info(f"idxs is {idxs}\n is_weight is {is_weight}")
         if not batch:
             # print(f"{self.print_tag} no enough sample and no update")
             return 0.
@@ -493,6 +562,23 @@ class DQAgent:
 
             # h = q.register_hook(self.hook)
             # self.hs.append(h)
+
+            if self.buffer_type != "er":
+                # update priority
+                idx = idxs[i]
+                if self.buffer_type == "per_td":
+                    td_error = abs((q.detach() - target).data)
+                    self.buffer.update(idx, td_error)
+
+                elif self.buffer_type == "per_return":
+                    self.buffer.update(idx, reward)
+
+                elif self.buffer_type == "per_td_return":
+                    td_error = abs((q.detach() - target).data)
+                    priority = td_error + self.td_reward_w * reward
+                    self.buffer.update(idx, priority)
+                    # logging.info(f"idx is {idx}, priority is {priority}")
+
             if i == 0:
 
                 # logging.debug(f"q is {q}")
@@ -530,13 +616,20 @@ class DQAgent:
 
         # torch.autograd.set_detect_anomaly(True)
         # 梯度更新
-        # logging.debug(f"this update: q is {qs}, target is {ts}")
+        # logging.info(f"this update: q is {qs}, target is {ts}")
         if self.test_mem:
             logging.debug(f"after batches")
             test_memory()
 
-        loss = self.criterion(qs, ts)
-        logging.info(f"loss is {loss}")
+        if self.buffer_type != "er":
+            loss = torch.mean(torch.Tensor(is_weight) * (qs - ts)**2)
+        else:
+            loss = self.criterion(qs, ts)
+
+        # logging.info(f"qs - ts : {qs-ts}")
+        # logging.info(f"qs - ts ^2: {(qs-ts)**2}")
+        # logging.info(f"* weight: {torch.Tensor(is_weight)* (qs-ts)**2}")
+        # logging.info(f"loss is {loss}")
         self.loss = loss.item()
         self.optimizer.zero_grad()
         # logging.debug(f"before backward")
