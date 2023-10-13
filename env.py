@@ -113,7 +113,7 @@ class Environment(object):
         if mode == "train":
             sample=5
         elif mode == "valid":
-            sample=20
+            sample=1000
             # logging.info(f"valid, sample {sample} times")
         ccwn_st = time.time()
         if i > 0 and self.use_record:
