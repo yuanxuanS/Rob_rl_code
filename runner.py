@@ -34,7 +34,7 @@ class Runner:
         self.nature_actor_loss = []
         self.main_loss = []
 
-        self.check_epi_step = 20
+        self.check_epi_step = 50
         self.global_iter = 0
 
 
