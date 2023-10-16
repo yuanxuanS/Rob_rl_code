@@ -155,9 +155,9 @@ def greedy(G, k):
 
 
 # test random
-seed = 10
-random.seed(seed)  # Python random module.
-np.random.seed(seed)  # Numpy module.
+# seed = 10
+# random.seed(seed)  # Python random module.
+# np.random.seed(seed)  # Numpy module.
 
 def t_rand():
 
@@ -165,3 +165,5 @@ def t_rand():
     print(f"np random now :{np.random.rand()}")
 
 
+from utils import process_config
+# process_config(1, 2,3)

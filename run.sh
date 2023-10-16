@@ -7,19 +7,20 @@ budget=$2
 episode=$3
 seeds=$4
 runtime=$5
-edge_p=0.1
+edge_p=0.05
 
-graph_pn=2   # 106
-g_train_nbr=1   # graph-pool-nbr >= train-graph-nbr + valid-graph-nbr
+graph_pn=1   # 106
+g_train_nbr=1   # graph-pool-nbr >= train-graph-nbr, graph-pool-nbr >= valid-graph-nbr
 g_valid_nbr=1
 
 
 valid_with_nature=False   # valid with nature?
-valid_episodes=1
+valid_episodes=3
 
-glb_logfile="log_5"
-logdir="10_3"
+glb_logfile="log_test"
+logdir="10_16"
 main_method="rl"    # rl
+buffer_type="er"  # ["per_td", "per_return", "per_td_return"]
 with_nature=False
 
 rl_algor="DDQN"
@@ -29,14 +30,19 @@ nheads=(8)
 atten_layer=1
 hid_dim='(8,)'  # must write , it is a tuple
 hid_dim_s='(8,)'
-out_atten_layer=1
-out_hid_dim='(32,)'  # final one must be 1 if nn model == v1 or v3
-out_hid_dim_s='(32,)'
+out_atten_layer=2
+out_hid_dim='(32,1)'  # final one must be 1 if nn model == v1 or v3
+out_hid_dim_s='(32,1)'
 
 alphas=(0.2)
 gammas=(0.99)
-lrs=(1e-3)
+lrs=(1e-4)
 batch_size=16
+
+use_decay=0
+init_epsilon=0.3
+final_epsilon=0.01
+epsilon_decay_steps=6000
 
 for nhead in ${nheads[@]}
 do
@@ -54,6 +60,7 @@ do
           --train-episodes $episode --valid-episodes $valid_episodes
           --with-nature $with_nature
           --rl-algor $rl_algor
+          --buffer-type $buffer_type
           --nnVersion $nn_version
           --batch-size $batch_size
           --GAT-heads $nhead
@@ -64,6 +71,10 @@ do
           --GAT-out-hid-dim '$out_hid_dim'
           --GAT-s-out-hid-dim '$out_hid_dim_s'
           --alpha $alpha
+          --use-decay $use_decay
+          --init-epsilon $init_epsilon
+          --final-epsilon $final_epsilon
+          --epsilon-decay-steps $epsilon_decay_steps
           --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/${runtime}_n.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_n_error.txt &"
         else
           COMMAND="python3 -u train_adversary.py --nodes $nodes --budget $budget
@@ -72,6 +83,7 @@ do
           --valid-with-nature $valid_with_nature --edge-p $edge_p --main-method $main_method
           --train-episodes $episode --valid-episodes $valid_episodes
           --rl-algor $rl_algor
+          --buffer-type $buffer_type
           --nnVersion $nn_version
           --batch-size $batch_size
           --GAT-heads $nhead
@@ -82,6 +94,10 @@ do
           --GAT-out-hid-dim '$out_hid_dim'
           --GAT-s-out-hid-dim '$out_hid_dim_s'
           --alpha $alpha
+          --use-decay $use_decay
+          --init-epsilon $init_epsilon
+          --final-epsilon $final_epsilon
+          --epsilon-decay-steps $epsilon_decay_steps
           --logdir $logdir --logtime $runtime --seed-nbr $seeds --gamma $gamma --lr $lr >../pscr/$glb_logfile/$logdir/logdir/$runtime.txt 2>../pscr/$glb_logfile/$logdir/logdir/${runtime}_error.txt &"
         fi
         echo $COMMAND

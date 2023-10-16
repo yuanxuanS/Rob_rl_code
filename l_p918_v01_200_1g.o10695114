@@ -1,3 +1,0 @@
-Warning: no access to tty (Bad file descriptor).
-Thus no job control in this shell.
-python3 -u train_adversary.py --nodes 200 --budget 8 --graph-pool-nbr 2 --train-graph-nbr 1 --valid-graph-nbr 1 --valid-with-nature False --edge-p 0.1 --main-method rl --train-episodes 2000 --valid-episodes 1 --rl-algor DDQN --GAT-heads 8 --GAT-atten-layer 4 --GAT-out-atten-layer 4 --GAT-hid-dim '(16, 8, 8, 8)' --GAT-s-hid-dim '(16, 8, 8, 8)' --GAT-out-hid-dim '(8, 8, 4, 1,)' --GAT-s-out-hid-dim '(8, 8, 4, 1,)' --alpha 0.2 --logdir 9_18 --logtime 2242 --seed-nbr 1 --gamma 0.99 --lr 1e-3 >../pscr/log_5/9_18/logdir/2242.txt 2>../pscr/log_5/9_18/logdir/2242_error.txt &

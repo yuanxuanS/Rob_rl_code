@@ -1,0 +1,22 @@
+per_return:
+  capacity: 100000
+  e: 0.01
+  a: 0.6
+  beta: 0.4
+  beta_increment_per_sampling: 0.001
+
+
+per_td:
+  capacity: 100000
+  e: 0.01
+  a: 0.6
+  beta: 0.4
+  beta_increment_per_sampling: 0.001
+
+per_td_return:
+  capacity: 100000
+  e: 0.01
+  a: 0.6
+  beta: 0.4
+  beta_increment_per_sampling: 0.001
+td_reward_weight: 0.5
