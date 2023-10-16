@@ -130,13 +130,19 @@ class DQAgent:
                                         alpha, nhead, self.merge_z, True,
                                         self.use_cuda, self.device, method=self.method)
             elif self.nnmodel == "v01":
+                '''
                 mlp_layer = 3
                 mlp_hid = 10
                 self.policy_model = GAT_MLP(mlp_layer, mlp_hid, layer_tp, self.node_features_dims,
                                     hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
                 self.target_model = GAT_MLP(mlp_layer, mlp_hid, layer_tp, self.node_features_dims,
                                     hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
-
+                '''
+                self.policy_model = GAT(self.nodes, layer_tp, self.node_features_dims,
+                                    hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
+                self.target_model = GAT(self.nodes, layer_tp, self.node_features_dims,
+                                    hid_dim_tp, alpha, nhead, self.merge_z, True, self.use_cuda, self.device, self.method)
+                
             elif self.nnmodel == "v0":
                 # nhid = 8, out-hid =32
                 self.policy_model = GAT_origin(1, 8, 0, 32, self.nodes, 0, alpha=alpha, nheads=nhead,
@@ -180,7 +186,8 @@ class DQAgent:
         self.z = torch.Tensor(self.hyper_pool[hyper_id])
 
     def reset(self):
-        self.global_step = 1
+        # self.global_step = 1
+        pass
         # print(f"{self.print_tag} agent reset done!")
 
     def forward_hook(self, module, input, output):
@@ -210,12 +217,12 @@ class DQAgent:
 
 
     @torch.no_grad()
-    def act(self, observation, feasible_action, mode):
-        self.global_step += 1
+    def act(self, observation, feasible_action, glb_steps, mode):
+        # self.global_step += 1
         # policy
         if self.model_name == 'GAT_QN':
             if self.use_decay > 0:
-                self.curr_epsilon = self.epsilon_decay(self.init_epsilon, self.final_epsilon, self.global_step, self.epsilon_decay_steps)
+                self.curr_epsilon = self.epsilon_decay(self.init_epsilon, self.final_epsilon, glb_steps, self.epsilon_decay_steps)
             else:
                 self.curr_epsilon = self.init_epsilon
             logging.info(f"epsilon is {self.curr_epsilon}")
@@ -255,7 +262,7 @@ class DQAgent:
                     q_a = self.policy_model(input_node_feat.to(self.device), self.adj.to(self.device),
                                             torch.Tensor(observation).to(self.device), None,
                                             z=self.z.to(self.device))
-                    logging.info(f"v01 q size is {q_a.size()}")
+                    logging.info(f"v01 q is {q_a}")
                 elif self.nnmodel == "v0":
                     input_node_feat = input_node_feat[None, ...]
                     if not isinstance(input_node_feat, torch.Tensor):

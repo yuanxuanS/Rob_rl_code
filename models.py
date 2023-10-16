@@ -73,48 +73,48 @@ class GAT_origin(nn.Module):
             out = F.elu(self.out_att(out, adjs[i]))
             outs.append(out)
 
-        # print(f"before stack , size {len(outs), len(outs[0][1])}, outs \n {outs}")
+        print(f"before stack , size {len(outs), len(outs[0][1])}, outs \n {outs}")
         outs = torch.stack(outs, dim=0)     # [bs, node_num, nheads]
-        # print(f"after stack , size {outs.size()}, outs \n {outs}")
+        print(f"after stack , size {outs.size()}, outs \n {outs}")
 
         q = self.q(outs.view(batch_size, -1))       # 如果batch_size=1, [1, ode_num, gat_out_dim] —— [1, node_num, 1]
-        # print(f"after nn : {q.size()}")
+        print(f"after nn : {q.size()}")
         q = q[..., None]
         logging.info(f"q size {q.size()}")
         return q
 
+'''
 
+layer = (2, 2)
+features_dim = 3
+hidden_dim = 8
+alpha = 0.2     # leakyReLU的alpha
+nhead = 2
+node_nbr = 10
+graph = Graph_IM('erdos_renyi', nodes=node_nbr, edges_p=0.5)
 
-# layer = (2, 2)
-# features_dim = 3
-# hidden_dim = 8
-# alpha = 0.2     # leakyReLU的alpha
-# nhead = 2
-# node_nbr = 10
-# graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
-
-# nfeat_s = node_nbr
-# hidden_dim_s = ((8,3,), (16, 4))
-# model = GAT_origin(features_dim, hidden_dim, 1, 2, node_nbr, 0, alpha=alpha, nheads=nhead,
-#             layer_type="default")
+nfeat_s = node_nbr
+hidden_dim_s = ((8,3,), (16, 4))
+model = GAT_origin(features_dim, hidden_dim, 1, 2, node_nbr, 0, alpha=alpha, nheads=nhead,
+            layer_type="default")
 # # # test
 
-# adj_matrix = graph.adj_matrix
+adj_matrix = graph.adj_matrix
 # print(f"graph adj matrix {graph.adj_matrix}")
-# adj_matrix = torch.Tensor(adj_matrix)
-# xv = generate_node_feature(graph, features_dim)
-# xv = torch.Tensor(xv)       # torch的输入必须是tensor
+adj_matrix = torch.Tensor(adj_matrix)
+xv = generate_node_feature(graph, features_dim)
+xv = torch.Tensor(xv)       # torch的输入必须是tensor
 
-# xv = torch.ones((node_nbr, features_dim))
-# # # print(f"node feature vector size {xv.size()}")     # [0-100]
-# xv = xv.unsqueeze(0)
+xv = torch.ones((node_nbr, features_dim))
+print(f"node feature vector {xv}")     # [0-100]
+xv = xv.unsqueeze(0)
 # print(f"xv size {xv.size()}, xv \n {xv}")
-# s_mat = graph.adm
-# y = model(xv, adj_matrix)
+s_mat = graph.adm
+y = model(xv, adj_matrix)
 # print(f"y size {y.size()}, y \n {y}")
-# y = torch.squeeze(y, dim=0)
-# print(f"y size {y.size()}, y \n {y}")
-
+y = torch.squeeze(y, dim=0)
+print(f"y {y}, y \n {y}")
+'''
 #
 
 class attentions(nn.Module):
@@ -561,10 +561,11 @@ class GAT_degree(nn.Module):
         return result
 
 class GAT(nn.Module):
-    def __init__(self, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
+    def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, mergeState, use_cuda, device, method):
         """Dense version of GAT."""
         super(GAT, self).__init__()
 
+        self.node_num = node_num
         self.use_cuda = use_cuda
         self.device = device
         self.nfeat = nfeat
@@ -597,6 +598,8 @@ class GAT(nn.Module):
         self.theta = nn.Parameter(torch.empty(1, self.nfeat))  # 大小和每个节点的feature向量一样
         nn.init.uniform_(self.theta, a=0, b=1)  # 均匀分布
 
+        # q network
+        self.q = torch.nn.Linear(self.node_num * self.out_nhid_tuple[-1], node_num, bias=True)
 
 
         # test
@@ -638,13 +641,14 @@ class GAT(nn.Module):
         result = F.elu(temp)
 
         # logging.debug(f"after out atten,  x size is \n {result.size()}")
-        # print(f"------ after out atten,  x size is \n {result.size()}")
-
+        # print(f"------ after out atten,  x is \n {result}")
+        result = self.q(result.view(1, -1))
+        # print(f"------ after q,  x size {result.T.size()} x is \n {result.T}")
 
         # result = F.log_softmax(x, dim=0)    # 不是分类问题，应该是纵向softmax
         # logging.debug(f"after log softmax, x is \n {x}")
 
-        return result
+        return result.T     #[node num, 1]
 
 
 '''
@@ -653,19 +657,21 @@ features_dim = 3
 hidden_dim = ((8,3,), (16, 5))
 alpha = 0.2     # leakyReLU的alpha
 nhead = 2
-node_nbr = 10
-graph = Graph_IM(nodes=node_nbr, edges_p=0.5)
+node_nbr = 33
+graph = Graph_IM('erdos_renyi', nodes=node_nbr, edges_p=0.5)
 #
 # nfeat_s = node_nbr
 # hidden_dim_s = ((8,3,), (16, 4))
-model = GAT(layer, nfeat=features_dim, nhid_tuple=hidden_dim, alpha=alpha, nheads=nhead,
+model = GAT(node_nbr, layer, nfeat=features_dim, nhid_tuple=hidden_dim, alpha=alpha, nheads=nhead,
             mergeZ=False, mergeState=False, use_cuda=False, device=False, method="base")
 # # # # test
 #
 adj_matrix = graph.adj_matrix
 # # # print(f"graph adj matrix {graph.adj_matrix}")
 adj_matrix = torch.Tensor(adj_matrix)
-xv = generate_node_feature(graph, features_dim)
+# xv = generate_node_feature(graph, features_dim)
+xv = torch.ones((node_nbr, features_dim))
+
 # # # print(f"node feature vector size {xv.size()}")     # [0-100]
 xv = torch.Tensor(xv)       # torch的输入必须是tensor
 #
@@ -677,7 +683,8 @@ for name, param in model.named_parameters():
 
 print(f"y size {y.size()}")
 
-# print(f"get y from GAT is {y}")     # [n, 1]
+print(f"get y from GAT is {y}")     # [n, 1]
+print(f"20 action is {y[20]}")     # [n, 1]
 '''
 
 class GAT_struc(nn.Module):

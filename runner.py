@@ -36,6 +36,7 @@ class Runner:
 
         self.check_epi_step = 50
         self.global_iter = 0
+        self.global_steps = 0
 
 
     def valid(self):
@@ -83,7 +84,7 @@ class Runner:
                 for i in range(self.environment.budget):
                     # print(f"---------- sub step {i}")
                     state, feasible_action = self.environment.get_seed_state()  # [1, N]
-                    action = self.agent.act(state, feasible_action, "valid")
+                    action = self.agent.act(state, feasible_action, 0, "valid")
                     logging.info(f"main agent action is {action} ")
                     next_state, reward, done = self.environment.step_seed(i, action, "valid")
                     logging.info(f"get reward is {reward}")
@@ -183,7 +184,8 @@ class Runner:
             logging.info(f"before main agent act")
 
             for i in range(self.environment.budget):
-                logging.info(f"---------- sub step {i}")
+                logging.info(f"---------- sub step {i}, global steps {self.global_steps}")
+                self.global_steps += 1
     
                 if self.test_time:
                     this_st = time.time()
@@ -205,7 +207,7 @@ class Runner:
                     print(f"time before act in a episode {time.time() - this_st}")
                     act_st = time.time()
 
-                action = self.agent.act(state, feasible_action, "train")
+                action = self.agent.act(state, feasible_action, self.global_steps, "train")
 
                 if self.test_mem:
                     self.test_memory()

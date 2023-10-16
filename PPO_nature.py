@@ -166,7 +166,7 @@ class GATPolicyNet_d(GAT_degree):
 
 class GATValueNet(GAT):
     def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device, method):
-        super(GATValueNet, self).__init__(layer_tuple, nfeat, nhid_tuple, alpha,
+        super(GATValueNet, self).__init__(node_num, layer_tuple, nfeat, nhid_tuple, alpha,
                                           nheads, mergeZ, observe_state, use_cuda, device, method)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         # 映射为一个scalar
@@ -209,7 +209,7 @@ class GATValueNet(GAT):
 
 class GATPolicyNet(GAT):
     def __init__(self, node_num, layer_tuple, nfeat, nhid_tuple, alpha, nheads, mergeZ, observe_state, use_cuda, device, method):
-        super(GATPolicyNet, self).__init__(layer_tuple, nfeat, nhid_tuple, alpha,
+        super(GATPolicyNet, self).__init__(node_num, layer_tuple, nfeat, nhid_tuple, alpha,
                                           nheads, mergeZ, observe_state, use_cuda, device, method)  # super找到当前类继承的父类，并对父类属性进行初始化，父类这里部分的参数为上一行给的参数。子类也得到父类的成员变量，后面可以直接用，不用再定义 self.nfeat = nfeat
 
         self.out_att_mu = self.out_att
