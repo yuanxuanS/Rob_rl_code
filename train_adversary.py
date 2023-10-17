@@ -21,7 +21,7 @@ import logging
 import ast
 
 
-log_dir_global = "log_test"
+log_dir_global = "log_5"
 
 parser = argparse.ArgumentParser()
 # log setting
@@ -201,7 +201,9 @@ main_setting = {
     "GAT_out_hid_dim": ast.literal_eval(args.GAT_out_hid_dim), # final one must be 1
     "GAT_s_hid_dim": ast.literal_eval(args.GAT_s_hid_dim),
     "GAT_s_out_hid_dim": ast.literal_eval(args.GAT_s_out_hid_dim),
-    "er": args.budget*args.train_episodes       # capacity of buffer
+    "er": args.budget*args.train_episodes,       # capacity of buffer
+    "update_target_steps": 20       # copy policy_model -> target model
+
 }
 
 nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)
@@ -259,7 +261,6 @@ eps = 0.2
 
 # main agent
 cascade = None
-update_target_steps = 5       # copy policy_model -> target model
 
 
 def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
@@ -282,7 +283,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
                          model_name,
                          main_setting,
                          env_setting["node_feat_dims"],
-                         main_setting["batch_size"], update_target_steps,
+                         main_setting["batch_size"], main_setting["update_target_steps"],
                          device_setting["use_cuda"],
                          device_setting["device"])
 

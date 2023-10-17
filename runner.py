@@ -263,7 +263,7 @@ class Runner:
                     logging.info(f"now update the main agent")
                     if self.test_time:
                         upd_st = time.time()
-                    loss = self.agent.update(self.global_iter)
+                    loss = self.agent.update(self.global_steps)
                     
                     if self.test_mem:
                         self.test_memory()
