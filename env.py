@@ -11,7 +11,8 @@ from IC import runIC_repeat, parallel_runIC_repeat
 
 class Environment(object):
 
-    def __init__(self, graph_pool, node_feat_pool, z_pool, budget, use_record=False):
+    def __init__(self, graph_pool, node_feat_pool, z_pool, budget, env_setting, use_record=False):
+        self.env_setting = env_setting
         ## 图
         self.graphs = graph_pool
         self.g_id = None
@@ -96,7 +97,7 @@ class Environment(object):
         self.state[0, action_node] = 1
         return self.state.copy()
 
-    def step_seed(self, i, main_action, mode):
+    def step_seed(self, i, iter, main_action, mode):
         '''
         计算reward并且进行state update, reward-marginal contribution
         :param action: node下标
@@ -111,11 +112,18 @@ class Environment(object):
         # 蒙特卡洛得到influence reward
 
         if mode == "train":
-            sample=5
+            if iter > 2000:
+                sample=100
+                logging.info(f"curr iter {iter}, sample {sample}")
+            else:
+                sample = self.env_setting["train_mc"]
+            logging.info(f"train, sample {sample} times")
+
         elif mode == "valid":
-            sample=1000
-            # logging.info(f"valid, sample {sample} times")
+            sample=self.env_setting["valid_mc"]
+            logging.info(f"valid, sample {sample} times")
         ccwn_st = time.time()
+
         if i > 0 and self.use_record:
             influence_without, std_without = self.reward_last, self.std_last
         else:
@@ -276,7 +284,7 @@ class Environment(object):
         for _ in range(self.budget):
             spread_mem, node_mem = -1, -1
             for i in set(range(int(self.G.node))) - set(S):  # set函数是做一个集合，里面不能包含重复元素，里面接受一个list做参数
-                s, _ = runIC_repeat(self.G.graph, S + [i])
+                s, _ = runIC_repeat(self.G.graph, S + [i], None, 1000)
                 if s > spread_mem:  # 遍历找到spread最广的节点
                     # print(f"larger spread is {len(s)}, node {i}")
                     spread_mem = s

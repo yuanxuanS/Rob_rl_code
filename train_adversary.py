@@ -45,6 +45,9 @@ parser.add_argument("--with-nature", type=bool, default=False)
 
 parser.add_argument("--batch-size", type=int, default=1)
 
+parser.add_argument("--target-start-update-t", type=int, default=1)
+parser.add_argument("--target-update-interval", type=int, default=20)
+
 parser.add_argument("--GAT-heads", type=int, default=1)
 parser.add_argument("--GAT-atten-layer", type=int, default=1)
 parser.add_argument("--GAT-out-atten-layer", type=int, default=1)
@@ -105,7 +108,8 @@ def load_graph(graph_type, graph_nbr_train, node_nbr, node_edge_p, logdir, logti
     graph_dic = {}
     for graph_ in range(graph_nbr_train):
         seed = graph_
-        G = Graph_IM(graph_type, nodes=node_nbr, edges_p=node_edge_p, seed=seed)
+        g = nx.barabasi_albert_graph(100, 2)
+        G = Graph_IM(graph_type, nodes=node_nbr, edges_p=node_edge_p, seed=seed, init_g=g)
         graph_dic[graph_] = G
         graph_dic[graph_].graph_name = str(graph_)
         # degree
@@ -175,7 +179,9 @@ env_setting = {"graph_type": args.graph_type,
                "nodes": args.nodes,  # number of graph nodes
                "edge_p": args.edge_p,
                "budgets": args.budget,
-               "use_record": args.use_record    # whether use last record in IC simulation
+               "use_record": args.use_record,    # whether use last record in IC simulation
+               "train_mc": 100,     # mc times under train mode
+               "valid_mc": 1000     # mc times under valid mode
                }
 
 # main agent 's training settings
@@ -202,8 +208,8 @@ main_setting = {
     "GAT_s_hid_dim": ast.literal_eval(args.GAT_s_hid_dim),
     "GAT_s_out_hid_dim": ast.literal_eval(args.GAT_s_out_hid_dim),
     "er": args.budget*args.train_episodes,       # capacity of buffer
-    "update_target_steps": 20       # copy policy_model -> target model
-
+    "target_start_update_t": args.target_start_update_t,
+    "target_update_interval": args.target_update_interval
 }
 
 nature_out_atten_dim = ast.literal_eval(args.GAT_out_hid_dim)
@@ -266,7 +272,7 @@ cascade = None
 def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
     logger.info(f"this seed is {this_seed}, pid is {os.getpid()}")
     # initialize
-    env = Environment(graph_pool, node_feat_pool, z_pool, env_setting["budgets"], env_setting["use_record"])  #
+    env = Environment(graph_pool, node_feat_pool, z_pool, env_setting["budgets"], env_setting, env_setting["use_record"])  #
     nature_agent = PPOContinuousAgent(graph_pool, node_feat_pool, z_pool,
                                       nature_setting,
                                       env_setting["nodes"], env_setting["node_feat_dims"],
@@ -283,7 +289,7 @@ def run_one_seed(logger, lock, this_seed, seed_per_g_dict):
                          model_name,
                          main_setting,
                          env_setting["node_feat_dims"],
-                         main_setting["batch_size"], main_setting["update_target_steps"],
+                         main_setting["batch_size"], 
                          device_setting["use_cuda"],
                          device_setting["device"])
 
@@ -378,7 +384,8 @@ lock = multiprocessing.Lock()
 for i in range(args.seed_nbr):
     seed.gener_seed()
 
-    this_seed = seed.get_value()
+    # this_seed = seed.get_value()
+    this_seed = 0
     print(f"seed is {this_seed}")
 
     # 设置全局日志配置

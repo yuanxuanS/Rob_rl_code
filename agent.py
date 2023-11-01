@@ -26,7 +26,7 @@ class DQAgent:
     def __init__(self, graph_pool, node_num, node_feat_pool, hyper_pool, policy_name,
                  main_setting,
                  node_dim,
-                 train_batch, update_target_steps, use_cuda, device):
+                 train_batch, use_cuda, device):
 
         self.use_cuda = use_cuda
         self.merge_z = main_setting["observe_z"]
@@ -84,7 +84,9 @@ class DQAgent:
         self.gamma = main_setting["gamma"]
         self.criterion = torch.nn.MSELoss(reduction='mean')
         
-        self.copy_model_steps = update_target_steps
+        # self.copy_model_steps = update_target_steps
+        self.target_model_last_update_t = main_setting["target_start_update_t"]
+        self.target_update_interval = main_setting["target_update_interval"]
         self.lr = main_setting["lr"]
 
         # log
@@ -202,23 +204,7 @@ class DQAgent:
         # self.global_step = 1
         pass
         # print(f"{self.print_tag} agent reset done!")
-'''
-    def forward_hook(self, module, input, output):
-        logging.debug('forward')
-        logging.debug(output.shape)
-        # logging.debug(output[0][0][0])
 
-    def backward_hook(self, module, grad_in, grad_out):
-        logging.debug('backward')
-        logging.debug(grad_in.shape)
-        logging.debug(grad_in)
-        logging.debug(grad_out.shape)
-        logging.debug(grad_out)
-
-    def hook(self, grad):
-        logging.debug("tensor grad:", grad)
-
-'''
     def epsilon_decay(self, init_v: float, final_v: float, step_t: int, decay_step: int):
         assert 0 < final_v <= 1, ValueError('Value Error')
         assert step_t >= 0, ValueError('Value Error')
@@ -675,12 +661,12 @@ class DQAgent:
         #     h.remove()
 
         # 每 C step，更新目标网络 = 当前的行为网络
-        if global_step % self.copy_model_steps == 0:
-            logging.info(f"global step is {global_step}, self.copy m st: {self.copy_model_steps}, % {global_step % self.copy_model_steps},  reload target model from policy model ")
+        if global_step - self.target_model_last_update_t > self.target_update_interval:
+            logging.info(f"global step is {global_step}, self.copy m st: {self.target_update_interval},  reload target model from policy model ")
             with torch.no_grad():
                 self.target_model.load_state_dict(self.policy_model.state_dict())  #
             # logging.debug(f"after reload, target model params: {self.target_model.state_dict()}")
-
+            self.target_model_last_update_t = global_step
         if self.test_mem:
             test_memory()
         del qs, ts, loss

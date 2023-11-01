@@ -13,13 +13,14 @@ def softmax(x):
 
 class Graph_IM:
     # 生成一张图, 返回图的性质
-    def __init__(self, graph_type, nodes, edges_p, seed=0):
+    def __init__(self, graph_type, nodes, edges_p, seed=0, init_g=None):
         self.graph_type = graph_type  # 'erdos_renyi'  #'powerlaw'#
         if self.graph_type == 'erdos_renyi':
             self.graph = nx.erdos_renyi_graph(n=nodes, p=edges_p, seed=seed)
         elif self.graph_type == 'powerlaw':
-            self.graph = nx.powerlaw_cluster_graph(n=nodes, m=3, p=edges_p, seed=seed)
-
+            # self.graph = nx.powerlaw_cluster_graph(n=nodes, m=3, p=edges_p, seed=seed)
+            self.graph = nx.barabasi_albert_graph(n=nodes, m=4, seed=seed, initial_graph=init_g)
+            # print(f"graph is {self.graph.edges}")
         self.graph_name = None
 
         self.node_degree_lst = None

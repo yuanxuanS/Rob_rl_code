@@ -86,7 +86,7 @@ class Runner:
                     state, feasible_action = self.environment.get_seed_state()  # [1, N]
                     action = self.agent.act(state, feasible_action, 0, "valid")
                     logging.info(f"main agent action is {action} ")
-                    next_state, reward, done = self.environment.step_seed(i, action, "valid")
+                    next_state, reward, done = self.environment.step_seed(i, 0, action,"valid")
                     logging.info(f"get reward is {reward}")
 
 
@@ -108,14 +108,15 @@ class Runner:
         self.test_time = True
         for episode in range(self.training_setting["train_episodes"]):  # one-step, adversary is a bandit
             
-            # validation
-            if self.global_iter % self.check_epi_step == 0:
-                g_episode_returns = self.valid()     
-                g_mean_returns = np.mean(g_episode_returns, axis=1)
+            if self.main_setting["agent_method"] == "rl":
+                # validation
+                if self.global_iter % self.check_epi_step == 0:
+                    g_episode_returns = self.valid()     
+                    g_mean_returns = np.mean(g_episode_returns, axis=1)
 
-                for r in range(self.env_setting["valid_graph_nbr"]):
-                    g_id = self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] + r
-                    self.writer.add_scalar(f"valid in graph: {g_id}/ with nature: {self.valid_setting['with_nature']}", g_mean_returns[r], self.global_iter)
+                    for r in range(self.env_setting["valid_graph_nbr"]):
+                        g_id = self.env_setting["graph_pool_n"] - self.env_setting["valid_graph_nbr"] + r
+                        self.writer.add_scalar(f"valid in graph: {g_id}/ with nature: {self.valid_setting['with_nature']}", g_mean_returns[r], self.global_iter)
 
 
             self.global_iter += 1
@@ -220,7 +221,7 @@ class Runner:
                 logging.info(f"curr seed set is {infeasible_action}, main agent action is {action}, its degree is {self.environment.G.node_degree_lst[action]}")
 
                 
-                next_state, reward, done = self.environment.step_seed(i, action, "train")
+                next_state, reward, done = self.environment.step_seed(i, self.global_iter, action, "train")
                 logging.info(f"get reward is {reward}")
 
                 if self.test_mem:
